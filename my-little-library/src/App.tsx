@@ -234,7 +234,7 @@ export default function App() {
   const releaseYearActivity = useMemo(() => {
     const counts = new Map<number, number>();
 
-    movies.forEach(movie => {
+    activeEntries.forEach(movie => {
       if (!getWatchedDates(movie).length) return;
 
       const year = Number(movie.year);
@@ -292,10 +292,10 @@ export default function App() {
   years.add(currentYear);
 
   return [...years].sort((a, b) => b - a);
-  }, [movies, currentYear]);
+  }, [activeEntries, currentYear]);
 
   const yearWatches = useMemo(() => {
-    return movies.flatMap(movie =>
+    return activeEntries.flatMap(movie =>
       getWatchedDates(movie)
         .filter(date => Number(date.slice(0, 4)) === selectedStatsYear)
         .map(date => ({ movie, date }))
@@ -496,8 +496,8 @@ const averageRating = watchedMovies.length
       return;
     }
 
-    if (!/^\d{4}$/.test(year.trim())) {
-      setEditorError("Enter a valid year (YYYY).");
+    if (year.trim() && !/^\d{4}$/.test(year.trim())) {
+      setEditorError("Enter a valid year (YYYY), or leave it blank.");
       return;
     }
 
@@ -674,13 +674,13 @@ const averageRating = watchedMovies.length
                   <div className="stats-grid">
                     <article className="stat-card">
                       <div className="stat-icon"><Film size={19} /></div>
-                      <p className="stat-label">Unique movies</p>
+                      <p className="stat-label">Unique titles</p>
                       <div className="stat-value">{yearMovies.length}</div>
                     </article>
 
                     <article className="stat-card">
                       <div className="stat-icon"><Clapperboard size={19} /></div>
-                      <p className="stat-label">Total watches</p>
+                      <p className="stat-label">Total finishes</p>
                       <div className="stat-value">{yearWatches.length}</div>
                     </article>
 
@@ -793,7 +793,7 @@ const averageRating = watchedMovies.length
                             <div
                               className="horizontal-bar-column"
                               key={item.year}
-                              title={`${item.year}: ${item.count} movies`}
+                              title={`${item.year}: ${item.count} titles`}
                             >
                               <div className="horizontal-bar-track">
                                 <div
@@ -822,7 +822,7 @@ const averageRating = watchedMovies.length
                         <p className="eyebrow">YOUR COLLECTION</p>
                         <h2>Titles finished in {selectedStatsYear}</h2>
                       </div>
-                      <span className="chart-total">{yearMovies.length} movies</span>
+                      <span className="chart-total">{yearMovies.length} titles</span>
                     </div>
 
                     {yearMovies.length ? (
@@ -830,7 +830,7 @@ const averageRating = watchedMovies.length
                     ) : (
                       <div className="empty-state compact">
                         <Film size={30} />
-                        <p>No movies watched in this year.</p>
+                        <p>No titles finished in this year.</p>
                       </div>
                     )}
                   </section>
@@ -847,7 +847,7 @@ const averageRating = watchedMovies.length
                     />
                   </div>
                   <span className="count">
-                    {visibleMovies.length} / {movies.length}
+                    {visibleMovies.length} / {activeEntries.length}
                   </span>
                   <label className="library-select-label">
                     <span>Sort</span>
