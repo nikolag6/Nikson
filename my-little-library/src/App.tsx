@@ -788,7 +788,7 @@ if (!isValidRating(rating)) {
                         </div>
                       </div>
                     ) : (
-                      <p className="chart-empty">No movie data available.</p>
+                      <p className="chart-empty">No release-year data available.</p>
                     )}
                   </section>
 
@@ -1060,7 +1060,7 @@ if (!isValidRating(rating)) {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">{editing ? "EDIT ENTRY" : "NEW ENTRY"}</p>
-                <h2>{editing ? `Edit ${getMediaType(editing) === "book" ? "book" : getMediaType(editing) === "tv" ? "show" : "movie"}` : `Add ${mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}`}</h2>
+                <h2>{editing ? `Edit ${getMediaType(editing) === "book" ? "book" : getMediaType(editing) === "tv" ? "show" : "movie"}` : `Add ${entryMediaType === "book" ? "book" : entryMediaType === "tv" ? "show" : "movie"}`}</h2>
               </div>
               <button className="icon-btn" onClick={() => setShowEditor(false)}>
                 <X />
