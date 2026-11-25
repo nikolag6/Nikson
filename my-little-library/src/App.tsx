@@ -107,6 +107,8 @@ export default function App() {
   const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("overview");
   const [selectedStatsYear, setSelectedStatsYear] = useState(new Date().getFullYear());
   const [filter, setFilter] = useState<"all" | "watched" | "backlog" | "thisYear">("all");
+  const [sortBy, setSortBy] = useState<"recent" | "oldest" | "ratingHigh" | "ratingLow" | "title">("recent");
+  const [minimumRating, setMinimumRating] = useState("all");
 
   const [showSettings, setShowSettings] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
@@ -118,6 +120,7 @@ export default function App() {
   const [rating, setRating] = useState("");
   const [poster, setPoster] = useState("");
   const [note, setNote] = useState("");
+  const [finishedOn, setFinishedOn] = useState("");
 
   const configured = Boolean(
     settings.owner && settings.repo && settings.folder && settings.token
@@ -423,6 +426,9 @@ const averageRating = watchedMovies.length
     if (filter === "thisYear") {
       result = result.filter(movie => getTags(movie).includes(currentYearTag));
     }
+    if (minimumRating !== "all") {
+      result = result.filter(movie => (getRating(movie) ?? 0) >= Number(minimumRating));
+    }
 
     if (query.trim()) {
       const search = query.toLowerCase();
@@ -431,8 +437,15 @@ const averageRating = watchedMovies.length
       );
     }
 
+    result.sort((a, b) => {
+      if (sortBy === "recent") return getLastWatched(b) - getLastWatched(a);
+      if (sortBy === "oldest") return getLastWatched(a) - getLastWatched(b);
+      if (sortBy === "ratingHigh") return (getRating(b) ?? 0) - (getRating(a) ?? 0);
+      if (sortBy === "ratingLow") return (getRating(a) ?? 99) - (getRating(b) ?? 99);
+      return a.title.localeCompare(b.title);
+    });
     return result;
-  }, [movies, filter, query, currentYearTag]);
+  }, [movies, filter, query, currentYearTag, sortBy, minimumRating]);
 
   function openDetails(movie: Movie) {
     setDetails(movie);
@@ -456,6 +469,7 @@ const averageRating = watchedMovies.length
     setRating("");
     setPoster("");
     setNote("");
+    setFinishedOn("");
     setShowEditor(true);
   }
 
@@ -464,9 +478,10 @@ const averageRating = watchedMovies.length
     setEditing(movie);
     setTitle(movie.title);
     setYear(movie.year);
-    setRating(movie.rating);
+    setRating(String(getRating(movie) ?? ""));
     setPoster(movie.poster);
     setNote(movie.body || "");
+    setFinishedOn([...getWatchedDates(movie)].sort().reverse()[0] ?? "");
     setShowEditor(true);
   }
 
@@ -495,7 +510,7 @@ const averageRating = watchedMovies.length
     setLoading(true);
 
     try {
-      const result = await saveMovie(settings, editing, { title, year, rating, poster, note });
+      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn });
       registerChange(result.movie, result.removedPath);
       setShowEditor(false);
       if (result.warning) setError(result.warning);
@@ -590,16 +605,13 @@ const averageRating = watchedMovies.length
               </button>
             </div>
 
-            <section className="intro">
+            <section className="intro intro-compact">
               <div>
-                <p className="eyebrow">YOUR COLLECTION</p>
-                <h1>Movies<span className="muted">.</span></h1>
-                <p className="subline">
-                  {movies.length} movies in your library
-                </p>
+                <h1>A little home for the movies you love.</h1>
+                <p className="subline">{movies.length} titles, kept in one place.</p>
               </div>
               <button className="primary-btn" onClick={openNew}>
-                <Plus size={18} /> Add movie
+                <Plus size={16} /> Add movie
               </button>
             </section>
 
@@ -625,167 +637,12 @@ const averageRating = watchedMovies.length
                 <p>Loading your library...</p>
               </div>
             ) : movieView === "overview" ? (
-              <div className="dashboard">
-                <div className="stats-grid">
-                  <article className="stat-card">
-                    <div className="stat-icon"><Film size={19} /></div>
-                    <p className="stat-label">Total movies</p>
-                    <div className="stat-value">{movies.length}</div>
-                  </article>
-
-                  <article className="stat-card">
-                    <div className="stat-icon"><Star size={19} /></div>
-                    <p className="stat-label">Watched</p>
-                    <div className="stat-value">{watchedMovies.length}</div>
-                  </article>
-
-                  <article className="stat-card">
-                    <div className="stat-icon"><Library size={19} /></div>
-                    <p className="stat-label">Planned</p>
-                    <div className="stat-value">{backlogMovies.length}</div>
-                  </article>
-                </div>
-
-                <section className="analytics-section overview-chart">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">YOUR WATCHING HISTORY</p>
-                    <h2>Movies watched per year</h2>
-                  </div>
-                  <span className="chart-total">
-                    {yearlyWatchActivity.reduce((sum, item) => sum + item.count, 0)} watches
-                  </span>
-                </div>
-
-                {yearlyWatchActivity.length ? (
-                  <div className="year-horizontal-chart">
-                    <div className="horizontal-bars">
-                      {yearlyWatchActivity.map(item => (
-                        <div
-                          className="horizontal-bar-column"
-                          key={item.year}
-                          title={`${item.year}: ${item.count} watches`}
-                        >
-                          <div className="horizontal-bar-track">
-                            <div
-                              className="horizontal-bar"
-                              style={{
-                                height: `${item.count / maxYearlyWatches * 100}%`
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="horizontal-axis">
-                      <span>{yearlyWatchActivity[0]?.year}</span>
-                      <span>{yearlyWatchActivity[yearlyWatchActivity.length - 1]?.year}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="chart-empty">No watching history available.</p>
-                )}
-              </section>
-
-              <section className="analytics-section overview-chart">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">FILM HISTORY</p>
-                    <h2>Movies by release year</h2>
-                  </div>
-                  <span className="chart-total">
-                    {releaseYearActivity.reduce((sum, item) => sum + item.count, 0)} movies
-                  </span>
-                </div>
-
-                {releaseYearActivity.length ? (
-                  <div className="year-horizontal-chart">
-                    <div className="horizontal-bars">
-                      {releaseYearActivity.map(item => (
-                        <div
-                          className="horizontal-bar-column"
-                          key={item.year}
-                          title={`${item.year}: ${item.count} movies`}
-                        >
-                          <div className="horizontal-bar-track">
-                            <div
-                              className="horizontal-bar"
-                              style={{
-                                height: `${item.count / maxReleaseYearCount * 100}%`
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="horizontal-axis">
-                      <span>{releaseYearActivity[0]?.year}</span>
-                      <span>{releaseYearActivity[releaseYearActivity.length - 1]?.year}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="chart-empty">No watching history available.</p>
-                )}
-              </section>
-
-                <section className="rating-section">
-                  <div className="section-heading">
-                    <div>
-                      <p className="eyebrow">YOUR TASTE</p>
-                      <h2>Rating Distribution</h2>
-                    </div>
-                    <div className="average-rating">
-                      <Star size={16} fill="currentColor" />
-                      <strong>{averageRating}</strong>
-                      <span>average</span>
-                    </div>
-                  </div>
-
-                  <div className="rating-chart">
-                    {ratingDistribution.map(item => (
-                      <div className="rating-column" key={item.rating}>
-                        <span className="rating-count">{item.count}</span>
-
-                        <div className="rating-bar-container">
-                          <div
-                            className="rating-bar"
-                            style={{
-                              height: `${(item.count / maxRatingCount) * 100}%`
-                            }}
-                          />
-                        </div>
-
-                        <span className="rating-number">{item.rating}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="recent-section">
-                  <div className="section-heading">
-                    <div>
-                      <p className="eyebrow">YOUR ACTIVITY</p>
-                      <h2>Recently watched</h2>
-                    </div>
-                    <button
-                      className="text-link"
-                      onClick={() => {
-                        setFilter("watched");
-                        setMovieView("library");
-                      }}
-                    >
-                      View all <ArrowRight size={15} />
-                    </button>
-                  </div>
-
-                  {recentlyWatched.length ? (
-                    <MovieGrid movies={recentlyWatched} onSelect={openDetails} />
-                  ) : (
-                    <div className="empty-state compact">
-                      <Film size={30} />
-                      <p>Your watched movies will appear here.</p>
-                    </div>
-                  )}
+              <div className="dashboard dashboard-minimal">
+                <section className="single-stat">
+                  <p className="eyebrow">YOUR COLLECTION</p>
+                  <div className="single-stat-number">{watchedMovies.length}</div>
+                  <h2>loved &amp; finished</h2>
+                  <p>Movies you’ve watched and rated.</p>
                 </section>
               </div>
               ) : movieView === "statistics" ? (
@@ -985,6 +842,26 @@ const averageRating = watchedMovies.length
                   <span className="count">
                     {visibleMovies.length} / {movies.length}
                   </span>
+                  <label className="library-select-label">
+                    <span>Sort</span>
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
+                      <option value="recent">Recently finished</option>
+                      <option value="oldest">Oldest finished</option>
+                      <option value="ratingHigh">Highest rated</option>
+                      <option value="ratingLow">Lowest rated</option>
+                      <option value="title">Title</option>
+                    </select>
+                  </label>
+                  <label className="library-select-label rating-filter">
+                    <span>Rating</span>
+                    <select value={minimumRating} onChange={e => setMinimumRating(e.target.value)}>
+                      <option value="all">Any</option>
+                      <option value="6">6+</option>
+                      <option value="7">7+</option>
+                      <option value="8">8+</option>
+                      <option value="9">9+</option>
+                    </select>
+                  </label>
                 </div>
 
                 <div className="filter-bar">
@@ -1213,10 +1090,7 @@ const averageRating = watchedMovies.length
             </div>
 
             <p className="help">
-              Enter the movie details. The file will be saved as
-              Movies/Database/YEAR/Title (YEAR).md.
-              The poster should be a direct image URL.
-              Characters not allowed in file names are replaced.
+              Add a title, your rating and the date you finished it. Your notes stay in your private GitHub library.
             </p>
 
             {editorError && (
@@ -1257,6 +1131,15 @@ const averageRating = watchedMovies.length
                 </select>
               </label>
             </div>
+
+            <label>
+              Finished on
+              <input
+                type="date"
+                value={finishedOn}
+                onChange={e => setFinishedOn(e.target.value)}
+              />
+            </label>
 
             <label>
               Poster URL
