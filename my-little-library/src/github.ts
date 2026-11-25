@@ -92,7 +92,7 @@ function repositoryContentsUrl(s: Settings, path: string) {
 function databasePath(s: Settings) {
   const parts = cleanFolder(s.folder).split("/").filter(Boolean);
   parts.pop();
-  return [...parts, "library.json.gz"].join("/");
+  return [...parts, "library.json"].join("/");
 }
 
 function databaseUrl(s: Settings) {
@@ -105,13 +105,8 @@ async function readDatabase(s: Settings): Promise<{ entries: Movie[]; sha: strin
     throw new Error("The private library database was not found. Check that the repository is private-data and the folder is Library/Database.");
   }
   const binary = atob(String(file.content).replace(/\s/g, ""));
-  const compressed = Uint8Array.from(binary, char => char.charCodeAt(0));
-  if (typeof DecompressionStream === "undefined") {
-    throw new Error("This browser cannot open the compressed library file. Please update your browser.");
-  }
-  const buffer = compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength) as ArrayBuffer;
-  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream("gzip"));
-  const raw = await new Response(stream).text();
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  const raw = new TextDecoder().decode(bytes);
   const parsed = JSON.parse(raw) as { entries?: unknown };
   if (!Array.isArray(parsed.entries)) throw new Error("The private library database has an invalid format.");
   return {
@@ -123,15 +118,8 @@ async function readDatabase(s: Settings): Promise<{ entries: Movie[]; sha: strin
 }
 
 async function writeDatabase(s: Settings, entries: Movie[], sha: string): Promise<string> {
-  if (typeof CompressionStream === "undefined") {
-    throw new Error("This browser cannot update the compressed library file. Please update your browser.");
-  }
   const payload = JSON.stringify({ version: 1, entries });
-  const stream = new Blob([payload]).stream().pipeThrough(new CompressionStream("gzip"));
-  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  let binary = "";
-  bytes.forEach(byte => binary += String.fromCharCode(byte));
-  const content = btoa(binary);
+  const content = encodeBase64(payload);
   const path = databasePath(s).split("/").map(encodeURIComponent).join("/");
   const writeUrl = `${API}/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${path}`;
   const written = await request(writeUrl, s.token, {
@@ -146,14 +134,14 @@ async function writeDatabase(s: Settings, entries: Movie[], sha: string): Promis
   return String(written?.content?.sha ?? "");
 }
 
-/** Loads the private compressed JSON database in one GitHub request. */
+/** Loads the private JSON database in one GitHub request. */
 export async function loadMovies(s: Settings): Promise<Movie[]> {
   try {
     const database = await readDatabase(s);
     return database.entries;
   } catch (e) {
     if (e instanceof GitHubError && e.status === 404) {
-      throw new Error("library.json.gz was not found in your private-data repository. Check the repository and folder in Settings.");
+      throw new Error("library.json was not found in your private-data repository. Check the repository and folder in Settings.");
     }
     throw e;
   }
