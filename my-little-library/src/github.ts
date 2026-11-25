@@ -178,7 +178,7 @@ export type SaveResult = {
 export async function saveMovie(
   s: Settings,
   movie: Movie | null,
-  values: { title: string; year: string; rating: string; poster: string; note: string }
+  values: { title: string; year: string; rating: string; poster: string; note: string; finishedOn?: string }
 ): Promise<SaveResult> {
   const title = sanitizeFilename(values.title);
   const year = values.year.trim();
@@ -218,6 +218,12 @@ export async function saveMovie(
   frontmatter.year = Number(year);
   frontmatter.rating = values.rating.trim() === "" ? null : Number(values.rating);
   frontmatter.cover = poster || null;
+  if (values.finishedOn && /^\d{4}-\d{2}-\d{2}$/.test(values.finishedOn)) {
+    const dates = Array.isArray(frontmatter.watched) ? [...frontmatter.watched] : frontmatter.watched ? [frontmatter.watched] : [];
+    const wikiDate = `[[${values.finishedOn}]]`;
+    if (!dates.some(value => String(value).includes(values.finishedOn!))) dates.push(wikiDate);
+    frontmatter.watched = dates;
+  }
   frontmatter.last_modified = localTimestamp();
   // nullStr "" writes `seria:` like Obsidian does, instead of `seria: null`.
   const yaml = stringify(frontmatter, { lineWidth: 0, nullStr: "" }).trimEnd();
