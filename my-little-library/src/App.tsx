@@ -107,8 +107,8 @@ export default function App() {
   const reconcileTimer = useRef<number | undefined>(undefined);
   const [pendingCount, setPendingCount] = useState(0);
 
-  const [mediaSection, setMediaSection] = useState<"books" | "movies" | "tv">("movies");
-  const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("overview");
+  const [mediaSection, setMediaSection] = useState<"all" | "books" | "movies" | "tv">("all");
+  const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("library");
   const [selectedStatsYear, setSelectedStatsYear] = useState(new Date().getFullYear());
   const [filter, setFilter] = useState<"all" | "watched" | "backlog" | "thisYear">("all");
   const [sortBy, setSortBy] = useState<"recent" | "oldest" | "ratingHigh" | "ratingLow" | "title">("recent");
@@ -132,7 +132,7 @@ export default function App() {
 
   const currentYear = new Date().getFullYear();
   const currentYearTag = `y${currentYear}`;
-  const activeEntries = useMemo(() => movies.filter(movie => getMediaType(movie) === mediaSection), [movies, mediaSection]);
+  const activeEntries = useMemo(() => mediaSection === "all" ? movies : movies.filter(movie => getMediaType(movie) === mediaSection), [movies, mediaSection]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -552,6 +552,12 @@ const averageRating = watchedMovies.length
 
         <nav className="main-nav">
           <button
+            className={mediaSection === "all" ? "active" : ""}
+            onClick={() => { setMediaSection("all"); setMovieView("library"); }}
+          >
+            <Library size={16} /> All
+          </button>
+          <button
             className={mediaSection === "books" ? "active" : ""}
             onClick={() => { setMediaSection("books"); setMovieView("library"); }}
           >
@@ -559,7 +565,7 @@ const averageRating = watchedMovies.length
           </button>
           <button
             className={mediaSection === "movies" ? "active" : ""}
-            onClick={() => { setMediaSection("movies"); setMovieView("overview"); }}
+            onClick={() => { setMediaSection("movies"); setMovieView("library"); }}
           >
             <Clapperboard size={16} /> Movies
           </button>
@@ -567,7 +573,7 @@ const averageRating = watchedMovies.length
             className={mediaSection === "tv" ? "active" : ""}
             onClick={() => { setMediaSection("tv"); setMovieView("library"); }}
           >
-            <Tv size={16} /> TV
+            <Tv size={16} /> TV Series
           </button>
         </nav>
 
@@ -591,7 +597,7 @@ const averageRating = watchedMovies.length
       </header>
 
       <main>
-        {mediaSection === "movies" || mediaSection === "books" || mediaSection === "tv" ? (
+        {mediaSection === "all" || mediaSection === "movies" || mediaSection === "books" || mediaSection === "tv" ? (
           <>
             <div className="section-nav">
               <button
@@ -618,11 +624,11 @@ const averageRating = watchedMovies.length
 
             <section className="intro intro-compact">
               <div>
-                <h1>{mediaSection === "books" ? "A little home for the books you love." : mediaSection === "tv" ? "A little home for the shows you love." : "A little home for the movies you love."}</h1>
+                <h1>{mediaSection === "all" ? "A little home for everything you love." : mediaSection === "books" ? "A little home for the books you love." : mediaSection === "tv" ? "A little home for the shows you love." : "A little home for the movies you love."}</h1>
                 <p className="subline">{activeEntries.length} titles, kept in one place.</p>
               </div>
               <button className="primary-btn" onClick={openNew}>
-                <Plus size={16} /> Add {mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}
+                <Plus size={16} /> Add {mediaSection === "all" ? "title" : mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}
               </button>
             </section>
 
