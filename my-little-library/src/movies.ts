@@ -39,8 +39,22 @@ export function getRating(movie: Movie): number | null {
 }
 
 export function getMediaType(movie: Movie): "book" | "movie" | "tv" {
-  const value = String(movie.frontmatter?.media_type || getTags(movie).find(tag => ["book", "movie", "tv"].includes(tag)) || "movie");
-  return value === "book" || value === "tv" ? value : "movie";
+  // Prefer explicit metadata, but fall back to the canonical folder path
+  // and tags for imported or older records with incomplete frontmatter.
+  const allowed = ["book", "movie", "tv"] as const;
+  const fromFrontmatter = String(movie.frontmatter?.media_type ?? "").trim().toLowerCase();
+  if (allowed.includes(fromFrontmatter as typeof allowed[number])) {
+    return fromFrontmatter as typeof allowed[number];
+  }
+
+  const pathType = String(movie.path ?? "").match(/(?:^|\/)(book|movie|tv)(?:\/|$)/i)?.[1]?.toLowerCase();
+  if (pathType && allowed.includes(pathType as typeof allowed[number])) {
+    return pathType as typeof allowed[number];
+  }
+
+  const tagType = getTags(movie).map(tag => String(tag).trim().toLowerCase())
+    .find(tag => allowed.includes(tag as typeof allowed[number]));
+  return tagType ? tagType as typeof allowed[number] : "movie";
 }
 
 export function isWatched(movie: Movie): boolean {
