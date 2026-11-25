@@ -1,12 +1,12 @@
 import type { Movie } from "./types";
 
 // ---------------------------------------------------------------------------
-// Rating scale: 2–5 in steps of 0.5. An empty rating means "not rated yet"
-// (backlog entries have no rating).
+// New ratings use a 1–10 scale. Legacy 1–5 ratings are normalized on read
+// so existing Markdown notes remain compatible.
 // ---------------------------------------------------------------------------
-export const MIN_RATING = 2;
-export const MAX_RATING = 5;
-export const RATING_STEP = 0.5;
+export const MIN_RATING = 1;
+export const MAX_RATING = 10;
+export const RATING_STEP = 1;
 
 export const RATING_OPTIONS: number[] = Array.from(
   { length: Math.round((MAX_RATING - MIN_RATING) / RATING_STEP) + 1 },
@@ -34,8 +34,8 @@ export function getTags(movie: Movie): string[] {
 
 export function getRating(movie: Movie): number | null {
   const value = Number(movie.rating);
-  return movie.rating !== "" && movie.rating != null &&
-    Number.isFinite(value) && value > 0 ? value : null;
+  if (movie.rating === "" || movie.rating == null || !Number.isFinite(value) || value <= 0) return null;
+  return value <= 5 ? value * 2 : value;
 }
 
 export function isWatched(movie: Movie): boolean {
