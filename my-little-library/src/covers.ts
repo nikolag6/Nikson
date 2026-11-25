@@ -94,7 +94,7 @@ async function bookCover(movie: Movie): Promise<string> {
     try {
       const q = `intitle:${query}${author ? `+inauthor:${author}` : ""}`;
       const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=20&printType=books`);
-      const items = Array.isArray(data.items) ? data.items : [];
+      const items: any[] = Array.isArray(data.items) ? data.items : [];
       const match = bestMatch(items, query, item => item.volumeInfo?.title || "", author, year);
       const image = match?.volumeInfo?.imageLinks?.thumbnail || match?.volumeInfo?.imageLinks?.smallThumbnail;
       if (image) return String(image).replace(/^http:/, "https:").replace("&zoom=1", "&zoom=2");
@@ -105,7 +105,7 @@ async function bookCover(movie: Movie): Promise<string> {
       const params = new URLSearchParams({ title: query, limit: "30", fields: "title,author_name,first_publish_year,cover_i" });
       if (author) params.set("author", author);
       const data = await fetchJson(`https://openlibrary.org/search.json?${params}`);
-      const docs = Array.isArray(data.docs) ? data.docs.filter((item: any) => item.cover_i) : [];
+      const docs: any[] = Array.isArray(data.docs) ? data.docs.filter((item: any) => item.cover_i) : [];
       const match = bestMatch(docs, query, item => item.title || "", author, year);
       if (match?.cover_i) return `https://covers.openlibrary.org/b/id/${match.cover_i}-L.jpg`;
     } catch { /* try next title variant */ }
