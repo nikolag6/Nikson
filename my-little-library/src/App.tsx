@@ -110,7 +110,8 @@ export default function App() {
   const [mediaSection, setMediaSection] = useState<"all" | "books" | "movies" | "tv">("all");
   const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("library");
   const [selectedStatsYear, setSelectedStatsYear] = useState(new Date().getFullYear());
-  const [filter, setFilter] = useState<"all" | "watched" | "backlog" | "thisYear">("all");
+  const [filter, setFilter] = useState<"all" | "watched" | "backlog">("all");
+  const [selectedReleaseYear, setSelectedReleaseYear] = useState("all");
   const [sortBy, setSortBy] = useState<"recent" | "oldest" | "ratingHigh" | "ratingLow" | "title">("recent");
   const [minimumRating, setMinimumRating] = useState("all");
 
@@ -125,13 +126,16 @@ export default function App() {
   const [poster, setPoster] = useState("");
   const [note, setNote] = useState("");
   const [finishedOn, setFinishedOn] = useState("");
+  const [author, setAuthor] = useState("");
+  const [seasons, setSeasons] = useState("");
+  const [coverMode, setCoverMode] = useState<"url" | "file">("url");
 
   const configured = Boolean(
     settings.owner && settings.repo && settings.folder && settings.token
   );
 
   const currentYear = new Date().getFullYear();
-  const currentYearTag = `y${currentYear}`;
+  const releaseYears = useMemo(() => [...new Set(activeEntries.map(movie => Number(movie.year)).filter(year => Number.isInteger(year) && year > 0))].sort((x, y) => y - x), [activeEntries]);
   const activeEntries = useMemo(() => {
     if (mediaSection === "all") return movies;
     const mediaType = mediaSection === "books" ? "book" : mediaSection === "movies" ? "movie" : "tv";
@@ -432,9 +436,7 @@ const averageRating = watchedMovies.length
 
     if (filter === "watched") result = result.filter(isWatched);
     if (filter === "backlog") result = result.filter(isBacklog);
-    if (filter === "thisYear") {
-      result = result.filter(movie => getTags(movie).includes(currentYearTag));
-    }
+    if (selectedReleaseYear !== "all") result = result.filter(movie => movie.year === selectedReleaseYear);
     if (minimumRating !== "all") {
       result = result.filter(movie => (getRating(movie) ?? 0) >= Number(minimumRating));
     }
@@ -454,7 +456,7 @@ const averageRating = watchedMovies.length
       return a.title.localeCompare(b.title);
     });
     return result;
-  }, [activeEntries, filter, query, currentYearTag, sortBy, minimumRating]);
+  }, [activeEntries, filter, query, selectedReleaseYear, sortBy, minimumRating]);
 
   function openDetails(movie: Movie) {
     setDetails(movie);
@@ -479,6 +481,9 @@ const averageRating = watchedMovies.length
     setPoster("");
     setNote("");
     setFinishedOn("");
+    setAuthor("");
+    setSeasons("");
+    setCoverMode("url");
     setShowEditor(true);
   }
 
@@ -491,6 +496,9 @@ const averageRating = watchedMovies.length
     setPoster(movie.poster);
     setNote(movie.body || "");
     setFinishedOn([...getWatchedDates(movie)].sort().reverse()[0] ?? "");
+    setAuthor(String(movie.frontmatter?.author ?? ""));
+    setSeasons(String(movie.frontmatter?.seasons ?? ""));
+    setCoverMode("url");
     setShowEditor(true);
   }
 
@@ -504,12 +512,7 @@ const averageRating = watchedMovies.length
       return;
     }
 
-    if (year.trim() && !/^\d{4}$/.test(year.trim())) {
-      setEditorError("Enter a valid year (YYYY), or leave it blank.");
-      return;
-    }
-
-    if (!isValidRating(rating)) {
+if (!isValidRating(rating)) {
       setEditorError(
         `Rating must be empty or between ${MIN_RATING} and ${MAX_RATING} in steps of ${RATING_STEP}.`
       );
@@ -519,7 +522,7 @@ const averageRating = watchedMovies.length
     setLoading(true);
 
     try {
-      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn, mediaType: editing ? getMediaType(editing) : mediaSection === "books" ? "book" : mediaSection === "tv" ? "tv" : "movie" });
+      const result = await saveMovie(settings, editing, { title, year: editing?.year ?? "", rating, poster, note, finishedOn, author, seasons, mediaType: editing ? getMediaType(editing) : mediaSection === "books" ? "book" : mediaSection === "tv" ? "tv" : "movie" });
       registerChange(result.movie, result.removedPath);
       setShowEditor(false);
       if (result.warning) setError(result.warning);
@@ -555,32 +558,9 @@ const averageRating = watchedMovies.length
         </div>
 
         <nav className="main-nav">
-          <button
-            className={mediaSection === "all" ? "active" : ""}
-            onClick={() => { setMediaSection("all"); setMovieView("library"); }}
-          >
-            <Library size={16} /> All
-          </button>
-          <button
-            className={mediaSection === "books" ? "active" : ""}
-            onClick={() => { setMediaSection("books"); setMovieView("library"); }}
-          >
-            <BookOpen size={16} /> Books
-          </button>
-          <button
-            className={mediaSection === "movies" ? "active" : ""}
-            onClick={() => { setMediaSection("movies"); setMovieView("library"); }}
-          >
-            <Clapperboard size={16} /> Movies
-          </button>
-          <button
-            className={mediaSection === "tv" ? "active" : ""}
-            onClick={() => { setMediaSection("tv"); setMovieView("library"); }}
-          >
-            <Tv size={16} /> TV Series
-          </button>
+          <button className={movieView === "library" ? "active" : ""} onClick={() => setMovieView("library")}><Library size={16} /> Library</button>
+          <button className={movieView === "statistics" ? "active" : ""} onClick={() => setMovieView("statistics")}><ChartNoAxesCombined size={16} /> Stats</button>
         </nav>
-
         <div className="header-actions">
           <button
             className="icon-btn"
@@ -603,27 +583,10 @@ const averageRating = watchedMovies.length
       <main>
         {mediaSection === "all" || mediaSection === "movies" || mediaSection === "books" || mediaSection === "tv" ? (
           <>
-            <div className="section-nav">
-              <button
-                className={movieView === "overview" ? "selected" : ""}
-                onClick={() => setMovieView("overview")}
-              >
-                <LayoutDashboard size={16} /> Overview
-              </button>
-
-              <button
-                className={movieView === "library" ? "selected" : ""}
-                onClick={() => setMovieView("library")}
-              >
-                <Library size={16} /> Library
-              </button>
-
-              {mediaSection === "movies" && <button
-                className={movieView === "statistics" ? "selected" : ""}
-                onClick={() => setMovieView("statistics")}
-              >
-                <ChartNoAxesCombined size={16} /> Statistics
-              </button>}
+            <div className="section-nav category-nav" aria-label="Media type">
+              {([["all","All"],["books","Books"],["movies","Movies"],["tv","TV Series"]] as const).map(([value,label]) => (
+                <button key={value} className={mediaSection === value ? "selected" : ""} onClick={() => setMediaSection(value)}>{label}</button>
+              ))}
             </div>
 
             <section className="intro intro-compact">
@@ -657,16 +620,7 @@ const averageRating = watchedMovies.length
                 <LoaderCircle className="spin" size={30} />
                 <p>Loading your library...</p>
               </div>
-            ) : movieView === "overview" ? (
-              <div className="dashboard dashboard-minimal">
-                <section className="single-stat">
-                  <p className="eyebrow">YOUR COLLECTION</p>
-                  <div className="single-stat-number">{watchedMovies.length}</div>
-                  <h2>loved &amp; finished</h2>
-                  <p>Entries you’ve finished and rated.</p>
-                </section>
-              </div>
-              ) : movieView === "statistics" ? (
+            ) : movieView === "statistics" ? (
                 <div className="year-statistics">
                   <div className="section-heading year-heading">
                     <div>
@@ -886,20 +840,15 @@ const averageRating = watchedMovies.length
                 </div>
 
                 <div className="filter-bar">
-                  {([
-                    ["all", "All"],
-                    ["watched", "Watched"],
-                    ["backlog", "Backlog"],
-                    ["thisYear", `This Year (${currentYear})`]
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      className={filter === value ? "active" : ""}
-                      onClick={() => setFilter(value)}
-                    >
-                      {label}
-                    </button>
+                  {([["all","All"],["watched","Finished"],["backlog","Backlog"]] as const).map(([value,label]) => (
+                    <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>
                   ))}
+                  <label className="year-filter"><span>Year</span>
+                    <select value={selectedReleaseYear} onChange={e => setSelectedReleaseYear(e.target.value)}>
+                      <option value="all">Any year</option>
+                      {releaseYears.map(value => <option key={value} value={String(value)}>{value}</option>)}
+                    </select>
+                  </label>
                 </div>
 
                 {visibleMovies.length === 0 ? (
@@ -1129,16 +1078,10 @@ const averageRating = watchedMovies.length
               />
             </label>
 
+            {(!editing && mediaSection === "all") && <label>Type<select value={mediaSection} onChange={e => setMediaSection(e.target.value as typeof mediaSection)}><option value="movies">Movie</option><option value="books">Book</option><option value="tv">TV Series</option></select></label>}
+            {((editing && getMediaType(editing) === "book") || (!editing && mediaSection === "books")) && <label>Author *<input value={author} onChange={e => setAuthor(e.target.value)} placeholder="Author name" /></label>}
+            {((editing && getMediaType(editing) === "tv") || (!editing && mediaSection === "tv")) && <label>Seasons<input type="number" min="1" value={seasons} onChange={e => setSeasons(e.target.value)} placeholder="Number of seasons" /></label>}
             <div className="two-col">
-              <label>
-                Year
-                <input
-                  inputMode="numeric"
-                  value={year}
-                  onChange={e => setYear(e.target.value)}
-                  placeholder="Leave blank if unknown"
-                />
-              </label>
               <label>
                 Rating
                 <select value={rating} onChange={e => setRating(e.target.value)}>
@@ -1162,14 +1105,23 @@ const averageRating = watchedMovies.length
               />
             </label>
 
-            <label>
-              Poster URL
-              <input
-                value={poster}
-                onChange={e => setPoster(e.target.value)}
-                placeholder="https://..."
-              />
-            </label>
+            <div className="cover-mode">
+              <button type="button" className={coverMode === "url" ? "active" : ""} onClick={() => setCoverMode("url")}>From internet</button>
+              <button type="button" className={coverMode === "file" ? "active" : ""} onClick={() => setCoverMode("file")}>Upload file</button>
+            </div>
+            {coverMode === "url" ? <label>Cover URL<input value={poster} onChange={e => setPoster(e.target.value)} placeholder="Paste an image URL..." /></label> :
+              <label>Choose cover from device<input type="file" accept="image/*" onChange={async e => {
+                const file=e.target.files?.[0]; if(!file)return;
+                try {
+                  const objectUrl=URL.createObjectURL(file);
+                  const img=await new Promise<HTMLImageElement>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=objectUrl;});
+                  const scale=Math.min(1,600/img.width,900/img.height),canvas=document.createElement("canvas");
+                  canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);
+                  const ctx=canvas.getContext("2d");if(!ctx)throw new Error("canvas");
+                  ctx.drawImage(img,0,0,canvas.width,canvas.height);URL.revokeObjectURL(objectUrl);
+                  setPoster(canvas.toDataURL("image/jpeg",0.78));setEditorError("");
+                } catch {setEditorError("Could not read this image. Try another file.");}
+              }} /></label>}
 
             {poster && (
               <div className="poster-preview">
@@ -1208,7 +1160,7 @@ const averageRating = watchedMovies.length
               <button
                 className="primary-btn"
                 onClick={() => void save()}
-                disabled={loading || !title.trim()}
+                disabled={loading || !title.trim() || (((editing && getMediaType(editing) === "book") || (!editing && mediaSection === "books")) && !author.trim())}
               >
                 {loading ? <LoaderCircle className="spin" /> : null}
                 Save to GitHub
