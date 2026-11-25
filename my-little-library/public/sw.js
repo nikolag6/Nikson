@@ -1,4 +1,4 @@
-const CACHE = "media-lists-v1";
+const CACHE = "my-little-library-v2";
 const ASSETS = ["./", "./manifest.webmanifest", "./icons/icon.svg"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
