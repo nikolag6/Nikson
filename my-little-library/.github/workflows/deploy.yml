@@ -1,7 +1,7 @@
 name: Deploy Media Lists
 on:
   push:
-    branches: [main]
+    branches: [master, my-little-library]
   workflow_dispatch:
 permissions:
   contents: read
