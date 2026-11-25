@@ -567,12 +567,14 @@ if (!isValidRating(rating)) {
       <main>
         {mediaSection === "all" || mediaSection === "movies" || mediaSection === "books" || mediaSection === "tv" ? (
           <>
+            <div className="section-nav main-nav" aria-label="Main sections">
+              <button className={movieView === "library" ? "selected" : ""} onClick={() => setMovieView("library")}><Library size={15} /> Library</button>
+              <button className={movieView === "statistics" ? "selected" : ""} onClick={() => setMovieView("statistics")}><ChartNoAxesCombined size={15} /> Stats</button>
+            </div>
             <div className="section-nav category-nav" aria-label="Media type">
               {([["all","All"],["books","Books"],["movies","Movies"],["tv","TV Series"]] as const).map(([value,label]) => (
-                <button key={value} className={movieView === "library" && mediaSection === value ? "selected" : ""} onClick={() => { setMediaSection(value); setMovieView("library"); }}>{label}</button>
+                <button key={value} className={mediaSection === value ? "selected" : ""} onClick={() => setMediaSection(value)}>{label}</button>
               ))}
-              <span className="category-nav-divider" />
-              <button className={movieView === "statistics" ? "selected stats-tab" : "stats-tab"} onClick={() => setMovieView("statistics")}><ChartNoAxesCombined size={15} /> Stats</button>
             </div>
 
             <section className="intro intro-compact">
