@@ -136,7 +136,7 @@ export default function App() {
   );
 
   const currentYear = new Date().getFullYear();
-  const releaseYears = useMemo(() => [...new Set(activeEntries.map(movie => Number(movie.year)).filter(year => Number.isInteger(year) && year > 0))].sort((x, y) => y - x), [activeEntries]);
+  const releaseYears = useMemo(() => [...new Set(activeEntries.flatMap(movie => getWatchedDates(movie).map(date => Number(date.slice(0, 4)))))].sort((x, y) => y - x), [activeEntries]);
   const activeEntries = useMemo(() => {
     if (mediaSection === "all") return movies;
     const mediaType = mediaSection === "books" ? "book" : mediaSection === "movies" ? "movie" : "tv";
@@ -437,7 +437,7 @@ const averageRating = watchedMovies.length
 
     if (filter === "watched") result = result.filter(isWatched);
     if (filter === "backlog") result = result.filter(isBacklog);
-    if (selectedReleaseYear !== "all") result = result.filter(movie => movie.year === selectedReleaseYear);
+    if (selectedReleaseYear !== "all") result = result.filter(movie => getWatchedDates(movie).some(date => date.slice(0, 4) === selectedReleaseYear));
     if (minimumRating !== "all") {
       result = result.filter(movie => (getRating(movie) ?? 0) >= Number(minimumRating));
     }
