@@ -511,7 +511,7 @@ const averageRating = watchedMovies.length
     setLoading(true);
 
     try {
-      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn, mediaType: editing ? getMediaType(editing) : mediaSection });
+      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn, mediaType: editing ? getMediaType(editing) : mediaSection === "books" ? "book" : mediaSection === "tv" ? "tv" : "movie" });
       registerChange(result.movie, result.removedPath);
       setShowEditor(false);
       if (result.warning) setError(result.warning);
