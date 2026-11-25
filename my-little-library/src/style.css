@@ -973,3 +973,45 @@ footer { border-color: #ded6c9; color: #858879; }
 @media (max-width: 370px) {
   .movie-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+
+/* Keep all four collection tabs visible and usable in the installed mobile app. */
+@media (max-width: 700px) {
+  .topbar {
+    height: auto;
+    min-height: 58px;
+    padding: 8px 14px 0;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .brand { order: 1; }
+  .header-actions { order: 2; margin-left: auto; }
+  .main-nav {
+    order: 3;
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 2px 0 8px;
+    gap: 2px;
+    justify-content: space-between;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .main-nav::-webkit-scrollbar { display: none; }
+  .main-nav button {
+    flex: 0 0 auto;
+    padding: 8px 9px;
+    gap: 5px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .app-shell main { margin-top: 22px; }
+}
+@media (max-width: 360px) {
+  .topbar { padding-left: 10px; padding-right: 10px; }
+  .main-nav button { padding: 7px 7px; font-size: 11px; }
+}
