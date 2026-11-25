@@ -5,7 +5,8 @@ import {
   Image as ImageIcon, Clapperboard, Tv, LayoutDashboard,
   Library, ArrowRight, ChartNoAxesCombined, CalendarDays
 } from "lucide-react";
-import { deleteMovie, loadMovies, saveMovie, testGitHub } from "./github";
+import { deleteMovie, loadMovies, saveCoverUpdates, saveMovie, testGitHub } from "./github";
+import { findCover } from "./covers";
 import MovieDetails from "./MovieDetails";
 import {
   MAX_RATING, MIN_RATING, PLATFORM_NAMES, RATING_OPTIONS, RATING_STEP,
@@ -130,6 +131,8 @@ export default function App() {
   const [seasons, setSeasons] = useState("");
   const [coverMode, setCoverMode] = useState<"url" | "file">("url");
   const [entryMediaType, setEntryMediaType] = useState<"book" | "movie" | "tv">("movie");
+  const [coverProgress, setCoverProgress] = useState<{ done: number; total: number } | null>(null);
+  const [coverMessage, setCoverMessage] = useState("");
 
   const configured = Boolean(
     settings.owner && settings.repo && settings.folder && settings.token
@@ -541,6 +544,46 @@ if (!isValidRating(rating)) {
     }
   }
 
+  async function findMissingCovers() {
+    const missing = movies.filter(movie => !movie.poster && !String(movie.frontmatter?.cover || "").startsWith("data:image/"));
+    if (!missing.length) {
+      setCoverMessage("Every title already has a cover.");
+      return;
+    }
+    setCoverMessage("");
+    setCoverProgress({ done: 0, total: missing.length });
+    setLoading(true);
+    let cursor = 0;
+    let done = 0;
+    const updates: Array<{ path: string; poster: string }> = [];
+    const worker = async () => {
+      while (cursor < missing.length) {
+        const movie = missing[cursor++];
+        try {
+          const poster = await findCover(movie);
+          if (poster) updates.push({ path: movie.path, poster });
+        } catch { /* keep unmatched titles available for manual cover upload */ }
+        done += 1;
+        setCoverProgress({ done, total: missing.length });
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: 4 }, () => worker()));
+      if (updates.length) {
+        const saved = await saveCoverUpdates(settings, updates);
+        saved.forEach(movie => pendingRef.current.set(movie.path, movie));
+        showMovies();
+        scheduleReconcile();
+      }
+      setCoverMessage(`Added ${updates.length} covers. ${missing.length - updates.length} titles still need a manual match.`);
+    } catch (e) {
+      setError(`Covers were found, but could not be saved: ${(e as Error).message}`);
+    } finally {
+      setCoverProgress(null);
+      setLoading(false);
+    }
+  }
+
   async function remove(movie: Movie) {
     if (!confirm(`Delete "${movie.title}" from the repository?`)) return;
 
@@ -847,6 +890,7 @@ if (!isValidRating(rating)) {
                   </label>
                 </div>
 
+                {coverMessage && <p className="cover-message">{coverMessage}</p>}
                 <div className="filter-bar">
                   {([["all","All"],["watched","Finished"],["backlog","Backlog"]] as const).map(([value,label]) => (
                     <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>
