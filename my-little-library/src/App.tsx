@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Film, Plus, Search, Settings as SettingsIcon, Star, X,
+  Film, Plus, Search, Settings as SettingsIcon, Star, X, BookOpen,
   RefreshCw, Github, LoaderCircle, Pencil, Trash2, Info,
   Image as ImageIcon, Clapperboard, Tv, LayoutDashboard,
   Library, ArrowRight, ChartNoAxesCombined, CalendarDays
@@ -10,7 +10,7 @@ import MovieDetails from "./MovieDetails";
 import {
   MAX_RATING, MIN_RATING, PLATFORM_NAMES, RATING_OPTIONS, RATING_STEP,
   applyPending, getLastWatched, getRating, getTags, getWatchedDates,
-  isBacklog, isValidRating, isWatched
+  isBacklog, isValidRating, isWatched, getMediaType
 } from "./movies";
 import type { PendingChanges } from "./movies";
 import type { Movie, Settings } from "./types";
@@ -18,9 +18,9 @@ import type { Movie, Settings } from "./types";
 const STORAGE_KEY = "media-app-settings";
 const defaults: Settings = {
   owner: "",
-  repo: "media_lists",
+  repo: "private-data",
   branch: "main",
-  folder: "Movies/Database",
+  folder: "Library/Database",
   token: ""
 };
 
@@ -103,7 +103,7 @@ export default function App() {
   const reconcileTimer = useRef<number | undefined>(undefined);
   const [pendingCount, setPendingCount] = useState(0);
 
-  const [mediaSection, setMediaSection] = useState<"movies" | "tv">("movies");
+  const [mediaSection, setMediaSection] = useState<"books" | "movies" | "tv">("movies");
   const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("overview");
   const [selectedStatsYear, setSelectedStatsYear] = useState(new Date().getFullYear());
   const [filter, setFilter] = useState<"all" | "watched" | "backlog" | "thisYear">("all");
@@ -128,6 +128,7 @@ export default function App() {
 
   const currentYear = new Date().getFullYear();
   const currentYearTag = `y${currentYear}`;
+  const activeEntries = useMemo(() => movies.filter(movie => getMediaType(movie) === mediaSection), [movies, mediaSection]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -202,14 +203,14 @@ export default function App() {
   }, []);
 
   const watchedMovies = useMemo(
-    () => movies.filter(isWatched),
-    [movies]
+    () => activeEntries.filter(isWatched),
+    [activeEntries]
   );
 
   const yearlyWatchActivity = useMemo(() => {
     const counts = new Map<number, number>();
 
-    movies.forEach(movie => {
+    activeEntries.forEach(movie => {
       getWatchedDates(movie).forEach(date => {
         const year = Number(date.slice(0, 4));
         counts.set(year, (counts.get(year) || 0) + 1);
@@ -228,7 +229,7 @@ export default function App() {
         count: counts.get(minYear + i) || 0
       })
     );
-  }, [movies]);
+  }, [activeEntries]);
 
   const releaseYearActivity = useMemo(() => {
     const counts = new Map<number, number>();
@@ -257,7 +258,7 @@ export default function App() {
         count: counts.get(minYear + i) || 0
       })
     );
-  }, [movies, currentYear]);
+  }, [activeEntries, currentYear]);
 
   const maxYearlyWatches = Math.max(
     1,
@@ -270,8 +271,8 @@ export default function App() {
   );
 
   const backlogMovies = useMemo(
-    () => movies.filter(isBacklog),
-    [movies]
+    () => activeEntries.filter(isBacklog),
+    [activeEntries]
   );
 
   const recentlyWatched = useMemo(
@@ -283,7 +284,7 @@ export default function App() {
 
   const statsYears = useMemo(() => {
   const years = new Set(
-    movies.flatMap(movie =>
+    activeEntries.flatMap(movie =>
       getWatchedDates(movie).map(date => Number(date.slice(0, 4)))
     )
   );
@@ -299,7 +300,7 @@ export default function App() {
         .filter(date => Number(date.slice(0, 4)) === selectedStatsYear)
         .map(date => ({ movie, date }))
     );
-  }, [movies, selectedStatsYear]);
+  }, [activeEntries, selectedStatsYear]);
 
   const yearMovies = useMemo(() => {
     const unique = new Map<string, Movie>();
@@ -419,7 +420,7 @@ const averageRating = watchedMovies.length
   : "—";
 
   const visibleMovies = useMemo(() => {
-    let result = [...movies];
+    let result = [...activeEntries];
 
     if (filter === "watched") result = result.filter(isWatched);
     if (filter === "backlog") result = result.filter(isBacklog);
@@ -445,7 +446,7 @@ const averageRating = watchedMovies.length
       return a.title.localeCompare(b.title);
     });
     return result;
-  }, [movies, filter, query, currentYearTag, sortBy, minimumRating]);
+  }, [activeEntries, filter, query, currentYearTag, sortBy, minimumRating]);
 
   function openDetails(movie: Movie) {
     setDetails(movie);
@@ -510,7 +511,7 @@ const averageRating = watchedMovies.length
     setLoading(true);
 
     try {
-      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn });
+      const result = await saveMovie(settings, editing, { title, year, rating, poster, note, finishedOn, mediaType: editing ? getMediaType(editing) : mediaSection });
       registerChange(result.movie, result.removedPath);
       setShowEditor(false);
       if (result.warning) setError(result.warning);
@@ -547,14 +548,20 @@ const averageRating = watchedMovies.length
 
         <nav className="main-nav">
           <button
+            className={mediaSection === "books" ? "active" : ""}
+            onClick={() => { setMediaSection("books"); setMovieView("library"); }}
+          >
+            <BookOpen size={16} /> Books
+          </button>
+          <button
             className={mediaSection === "movies" ? "active" : ""}
-            onClick={() => setMediaSection("movies")}
+            onClick={() => { setMediaSection("movies"); setMovieView("overview"); }}
           >
             <Clapperboard size={16} /> Movies
           </button>
           <button
             className={mediaSection === "tv" ? "active" : ""}
-            onClick={() => setMediaSection("tv")}
+            onClick={() => { setMediaSection("tv"); setMovieView("library"); }}
           >
             <Tv size={16} /> TV
           </button>
@@ -580,7 +587,7 @@ const averageRating = watchedMovies.length
       </header>
 
       <main>
-        {mediaSection === "movies" ? (
+        {mediaSection === "movies" || mediaSection === "books" || mediaSection === "tv" ? (
           <>
             <div className="section-nav">
               <button
@@ -597,21 +604,21 @@ const averageRating = watchedMovies.length
                 <Library size={16} /> Library
               </button>
 
-              <button
+              {mediaSection === "movies" && <button
                 className={movieView === "statistics" ? "selected" : ""}
                 onClick={() => setMovieView("statistics")}
               >
                 <ChartNoAxesCombined size={16} /> Statistics
-              </button>
+              </button>}
             </div>
 
             <section className="intro intro-compact">
               <div>
-                <h1>A little home for the movies you love.</h1>
-                <p className="subline">{movies.length} titles, kept in one place.</p>
+                <h1>{mediaSection === "books" ? "A little home for the books you love." : mediaSection === "tv" ? "A little home for the shows you love." : "A little home for the movies you love."}</h1>
+                <p className="subline">{activeEntries.length} titles, kept in one place.</p>
               </div>
               <button className="primary-btn" onClick={openNew}>
-                <Plus size={16} /> Add movie
+                <Plus size={16} /> Add {mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}
               </button>
             </section>
 
@@ -642,7 +649,7 @@ const averageRating = watchedMovies.length
                   <p className="eyebrow">YOUR COLLECTION</p>
                   <div className="single-stat-number">{watchedMovies.length}</div>
                   <h2>loved &amp; finished</h2>
-                  <p>Movies you’ve watched and rated.</p>
+                  <p>Entries you’ve finished and rated.</p>
                 </section>
               </div>
               ) : movieView === "statistics" ? (
@@ -774,8 +781,8 @@ const averageRating = watchedMovies.length
                   <section className="analytics-section">
                     <div className="section-heading">
                       <div>
-                        <p className="eyebrow">FILM HISTORY</p>
-                        <h3>Movies by release year</h3>
+                        <p className="eyebrow">COLLECTION HISTORY</p>
+                        <h3>Titles by release year</h3>
                       </div>
                     </div>
 
@@ -813,7 +820,7 @@ const averageRating = watchedMovies.length
                     <div className="section-heading">
                       <div>
                         <p className="eyebrow">YOUR COLLECTION</p>
-                        <h2>Movies watched in {selectedStatsYear}</h2>
+                        <h2>Titles finished in {selectedStatsYear}</h2>
                       </div>
                       <span className="chart-total">{yearMovies.length} movies</span>
                     </div>
@@ -884,15 +891,15 @@ const averageRating = watchedMovies.length
                 {visibleMovies.length === 0 ? (
                   <div className="empty-state">
                     <Film size={36} />
-                    <h2>{query ? "No movies found" : "No movies here yet"}</h2>
+                    <h2>{query ? "No titles found" : "No titles here yet"}</h2>
                     <p>
                       {query
                         ? "Try a different search term."
-                        : "There are no movies matching this filter."}
+                        : "There are no titles matching this filter."}
                     </p>
                     {!query && filter === "all" && (
                       <button className="primary-btn" onClick={openNew}>
-                        <Plus size={18} /> Add movie
+                        <Plus size={18} /> Add {mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}
                       </button>
                     )}
                   </div>
@@ -941,7 +948,7 @@ const averageRating = watchedMovies.length
             </div>
 
             <p className="help">
-              Enter your private <b>media_lists</b> repository details.
+              Enter your private <b>private-data</b> repository details.
               Your token is stored locally in this browser.
             </p>
 
@@ -959,7 +966,7 @@ const averageRating = watchedMovies.length
               <input
                 value={settings.repo}
                 onChange={e => setSettings({ ...settings, repo: e.target.value })}
-                placeholder="media_lists"
+                placeholder="private-data"
               />
             </label>
 
@@ -977,7 +984,7 @@ const averageRating = watchedMovies.length
                 <input
                   value={settings.folder}
                   onChange={e => setSettings({ ...settings, folder: e.target.value })}
-                  placeholder="Movies/Database"
+                  placeholder="Library/Database"
                 />
               </label>
             </div>
@@ -994,7 +1001,7 @@ const averageRating = watchedMovies.length
             </label>
 
             <div className="help">
-              Token permissions: select only the <b>media_lists</b> repository
+              Token permissions: select only the <b>private-data</b> repository
               and set Repository permissions → Contents: Read and write.
               Keep Metadata as Read-only.
             </div>
@@ -1044,7 +1051,7 @@ const averageRating = watchedMovies.length
           >
             <div className="modal-head">
               <div>
-                <p className="eyebrow">MOVIE DETAILS</p>
+                <p className="eyebrow">{getMediaType(details) === "book" ? "BOOK DETAILS" : getMediaType(details) === "tv" ? "TV DETAILS" : "MOVIE DETAILS"}</p>
                 <h2>{details.title}</h2>
               </div>
               <button
@@ -1082,7 +1089,7 @@ const averageRating = watchedMovies.length
             <div className="modal-head">
               <div>
                 <p className="eyebrow">{editing ? "EDIT ENTRY" : "NEW ENTRY"}</p>
-                <h2>{editing ? "Edit movie" : "Add movie"}</h2>
+                <h2>{editing ? `Edit ${getMediaType(editing) === "book" ? "book" : getMediaType(editing) === "tv" ? "show" : "movie"}` : `Add ${mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}`}</h2>
               </div>
               <button className="icon-btn" onClick={() => setShowEditor(false)}>
                 <X />
@@ -1115,7 +1122,7 @@ const averageRating = watchedMovies.length
                   inputMode="numeric"
                   value={year}
                   onChange={e => setYear(e.target.value)}
-                  placeholder="2017"
+                  placeholder="Leave blank if unknown"
                 />
               </label>
               <label>
