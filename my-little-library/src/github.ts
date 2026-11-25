@@ -109,7 +109,8 @@ async function readDatabase(s: Settings): Promise<{ entries: Movie[]; sha: strin
   if (typeof DecompressionStream === "undefined") {
     throw new Error("This browser cannot open the compressed library file. Please update your browser.");
   }
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const buffer = compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength) as ArrayBuffer;
+  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream("gzip"));
   const raw = await new Response(stream).text();
   const parsed = JSON.parse(raw) as { entries?: unknown };
   if (!Array.isArray(parsed.entries)) throw new Error("The private library database has an invalid format.");
@@ -131,7 +132,9 @@ async function writeDatabase(s: Settings, entries: Movie[], sha: string): Promis
   let binary = "";
   bytes.forEach(byte => binary += String.fromCharCode(byte));
   const content = btoa(binary);
-  const written = await request(databaseUrl(s), s.token, {
+  const path = databasePath(s).split("/").map(encodeURIComponent).join("/");
+  const writeUrl = `${API}/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${path}`;
+  const written = await request(writeUrl, s.token, {
     method: "PUT",
     body: JSON.stringify({
       message: "Update personal library",
