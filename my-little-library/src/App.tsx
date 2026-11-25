@@ -650,6 +650,16 @@ if (!isValidRating(rating)) {
               </button>
             </section>
 
+            {configured && (
+              <div className="cover-tools">
+                <button className="secondary-btn" onClick={() => void findMissingCovers()} disabled={loading || Boolean(coverProgress)}>
+                  {coverProgress ? <LoaderCircle className="spin" size={16} /> : <ImageIcon size={16} />}
+                  {coverProgress ? `Finding covers… ${coverProgress.done}/${coverProgress.total}` : "Find covers for my library"}
+                </button>
+                {coverMessage && <span className="help">{coverMessage}</span>}
+              </div>
+            )}
+
             {error && (
               <div className="error-banner">
                 <span>{error}</span>
