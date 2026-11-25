@@ -182,7 +182,7 @@ export type SaveResult = {
 export async function saveMovie(
   s: Settings,
   movie: Movie | null,
-  values: { title: string; year: string; rating: string; poster: string; note: string; finishedOn?: string; mediaType?: "book" | "movie" | "tv" }
+  values: { title: string; year: string; rating: string; poster: string; note: string; finishedOn?: string; author?: string; seasons?: string; mediaType?: "book" | "movie" | "tv" }
 ): Promise<SaveResult> {
   const title = sanitizeFilename(values.title);
   const year = values.year.trim();
@@ -210,7 +210,9 @@ export async function saveMovie(
   };
   frontmatter.media_type = mediaType;
   frontmatter.tags = Array.from(new Set([...((Array.isArray(frontmatter.tags) ? frontmatter.tags : []) as string[]), mediaType]));
-  frontmatter.year = year ? Number(year) : null;
+  frontmatter.year = movie ? (movie.frontmatter?.year ?? (year ? Number(year) : null)) : null;
+  if (mediaType === "book") frontmatter.author = values.author?.trim() || null;
+  if (mediaType === "tv") frontmatter.seasons = values.seasons?.trim() ? Number(values.seasons) : null;
   frontmatter.rating = values.rating.trim() === "" ? null : Number(values.rating);
   frontmatter.cover = poster || null;
   if (values.finishedOn && /^\d{4}-\d{2}-\d{2}$/.test(values.finishedOn)) {
