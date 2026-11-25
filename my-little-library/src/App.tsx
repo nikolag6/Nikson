@@ -67,7 +67,7 @@ function MovieGrid({
               <span>{movie.year || "—"}</span>
               <span className="rating">
                 <Star size={13} fill="currentColor" />
-                {getRating(movie)?.toFixed(1) ?? "—"}
+                {getRating(movie)?.toFixed(0) ?? "—"}
               </span>
             </div>
           </div>
@@ -542,7 +542,7 @@ const averageRating = watchedMovies.length
       <header className="topbar">
         <div className="brand">
           <div className="brand-icon"><Film size={19} /></div>
-          <span>media<span className="accent">lists</span></span>
+          <span>my little <span className="accent">library</span></span>
         </div>
 
         <nav className="main-nav">
