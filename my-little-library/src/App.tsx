@@ -17,7 +17,7 @@ import type { Movie, Settings } from "./types";
 
 const STORAGE_KEY = "media-app-settings";
 const defaults: Settings = {
-  owner: "",
+  owner: "nikolag6",
   repo: "private-data",
   branch: "main",
   folder: "Library/Database",
