@@ -223,7 +223,8 @@ export async function saveMovie(
   }
   frontmatter.last_modified = localTimestamp();
 
-  const body = updateCoverInBody(values.note, poster).trim();
+  // Uploaded data URLs already live in frontmatter.cover; avoid duplicating the image in the note body.
+  const body = poster.startsWith("data:image/") ? values.note.trim() : updateCoverInBody(values.note, poster).trim();
   const saved: Movie = {
     path: targetPath,
     sha: database.sha,
