@@ -35,7 +35,12 @@ export function getTags(movie: Movie): string[] {
 export function getRating(movie: Movie): number | null {
   const value = Number(movie.rating);
   if (movie.rating === "" || movie.rating == null || !Number.isFinite(value) || value <= 0) return null;
-  return value <= 5 ? value * 2 : value;
+  return value;
+}
+
+export function getMediaType(movie: Movie): "book" | "movie" | "tv" {
+  const value = String(movie.frontmatter?.media_type || getTags(movie).find(tag => ["book", "movie", "tv"].includes(tag)) || "movie");
+  return value === "book" || value === "tv" ? value : "movie";
 }
 
 export function isWatched(movie: Movie): boolean {
