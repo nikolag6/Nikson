@@ -82,7 +82,7 @@ export default function MovieDetails({ movie }: { movie: Movie }) {
           <div className="details-rating">
             <Star size={16} fill="currentColor" />
             {rating !== null ? (
-              <><strong>{rating.toFixed(1)}</strong><span> / 5</span></>
+              <><strong>{rating.toFixed(0)}</strong><span> / 10</span></>
             ) : (
               <span>Not rated</span>
             )}
@@ -102,7 +102,7 @@ export default function MovieDetails({ movie }: { movie: Movie }) {
         </div>
       </div>
 
-      <Section label={watched.length > 1 ? `WATCHED · ${watched.length}×` : "WATCHED"}>
+      <Section label={watched.length > 1 ? `FINISHED · ${watched.length}×` : "FINISHED"}>
         {watched.length > 0 ? (
           <ul className="watch-list">
             {watched.map((date, index) => (
@@ -111,7 +111,7 @@ export default function MovieDetails({ movie }: { movie: Movie }) {
           </ul>
         ) : (
           <p className="details-line muted-line">
-            {isBacklog(movie) ? "Not watched yet." : "No watch date recorded."}
+            {isBacklog(movie) ? "Not watched yet." : "No finish date recorded."}
           </p>
         )}
       </Section>
