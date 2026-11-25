@@ -136,12 +136,12 @@ export default function App() {
   );
 
   const currentYear = new Date().getFullYear();
-  const releaseYears = useMemo(() => [...new Set(activeEntries.flatMap(movie => getWatchedDates(movie).map(date => Number(date.slice(0, 4)))))].sort((x, y) => y - x), [activeEntries]);
   const activeEntries = useMemo(() => {
     if (mediaSection === "all") return movies;
     const mediaType = mediaSection === "books" ? "book" : mediaSection === "movies" ? "movie" : "tv";
     return movies.filter(movie => getMediaType(movie) === mediaType);
   }, [movies, mediaSection]);
+  const releaseYears = useMemo(() => [...new Set(activeEntries.flatMap(movie => getWatchedDates(movie).map(date => Number(date.slice(0, 4)))))].sort((x, y) => y - x), [activeEntries]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
