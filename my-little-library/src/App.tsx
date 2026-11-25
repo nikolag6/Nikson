@@ -132,7 +132,11 @@ export default function App() {
 
   const currentYear = new Date().getFullYear();
   const currentYearTag = `y${currentYear}`;
-  const activeEntries = useMemo(() => mediaSection === "all" ? movies : movies.filter(movie => getMediaType(movie) === mediaSection), [movies, mediaSection]);
+  const activeEntries = useMemo(() => {
+    if (mediaSection === "all") return movies;
+    const mediaType = mediaSection === "books" ? "book" : mediaSection === "movies" ? "movie" : "tv";
+    return movies.filter(movie => getMediaType(movie) === mediaType);
+  }, [movies, mediaSection]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
