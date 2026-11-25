@@ -1068,3 +1068,12 @@ footer { border-color: #ded6c9; color: #858879; }
   .monthly-posters button { flex-basis:43px; width:43px; height:65px; }
   .category-nav-divider { margin:0 2px; }
 }
+
+
+/* Keep Library and Stats together as the primary navigation. */
+.main-nav { margin-left:0; margin-right:0; }
+.main-nav button.selected {
+  background:#e7edf9;
+  color:#34496f;
+  border-color:#d4def0;
+}
