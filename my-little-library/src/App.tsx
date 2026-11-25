@@ -129,6 +129,7 @@ export default function App() {
   const [author, setAuthor] = useState("");
   const [seasons, setSeasons] = useState("");
   const [coverMode, setCoverMode] = useState<"url" | "file">("url");
+  const [entryMediaType, setEntryMediaType] = useState<"book" | "movie" | "tv">("movie");
 
   const configured = Boolean(
     settings.owner && settings.repo && settings.folder && settings.token
@@ -484,6 +485,7 @@ const averageRating = watchedMovies.length
     setAuthor("");
     setSeasons("");
     setCoverMode("url");
+    setEntryMediaType(mediaSection === "books" ? "book" : mediaSection === "tv" ? "tv" : "movie");
     setShowEditor(true);
   }
 
@@ -499,6 +501,7 @@ const averageRating = watchedMovies.length
     setAuthor(String(movie.frontmatter?.author ?? ""));
     setSeasons(String(movie.frontmatter?.seasons ?? ""));
     setCoverMode("url");
+    setEntryMediaType(getMediaType(movie));
     setShowEditor(true);
   }
 
@@ -509,6 +512,11 @@ const averageRating = watchedMovies.length
 
     if (!title.trim()) {
       setEditorError("Enter a title.");
+      return;
+    }
+    const effectiveMediaType = editing ? getMediaType(editing) : entryMediaType;
+    if (effectiveMediaType === "book" && !author.trim()) {
+      setEditorError("Enter the book author.");
       return;
     }
 
@@ -522,7 +530,7 @@ if (!isValidRating(rating)) {
     setLoading(true);
 
     try {
-      const result = await saveMovie(settings, editing, { title, year: editing?.year ?? "", rating, poster, note, finishedOn, author, seasons, mediaType: editing ? getMediaType(editing) : mediaSection === "books" ? "book" : mediaSection === "tv" ? "tv" : "movie" });
+      const result = await saveMovie(settings, editing, { title, year: editing?.year ?? "", rating, poster, note, finishedOn, author, seasons, mediaType: effectiveMediaType });
       registerChange(result.movie, result.removedPath);
       setShowEditor(false);
       if (result.warning) setError(result.warning);
@@ -728,7 +736,7 @@ if (!isValidRating(rating)) {
                       </div>
                     </div>
 
-                    <div className="platform-chart">
+                    {mediaSection === "movies" && <div className="platform-chart">
                       {platformActivity.map(item => (
                         <div className="weekday-row" key={item.platform}>
                           <span>{PLATFORM_NAMES[item.platform] ?? item.platform}</span>
@@ -743,7 +751,7 @@ if (!isValidRating(rating)) {
                           <strong>{item.count}</strong>
                         </div>
                       ))}
-                    </div>
+                    </div>}
                   </section>
 
                   <section className="analytics-section">
@@ -1078,9 +1086,9 @@ if (!isValidRating(rating)) {
               />
             </label>
 
-            {(!editing && mediaSection === "all") && <label>Type<select value={mediaSection} onChange={e => setMediaSection(e.target.value as typeof mediaSection)}><option value="movies">Movie</option><option value="books">Book</option><option value="tv">TV Series</option></select></label>}
-            {((editing && getMediaType(editing) === "book") || (!editing && mediaSection === "books")) && <label>Author *<input value={author} onChange={e => setAuthor(e.target.value)} placeholder="Author name" /></label>}
-            {((editing && getMediaType(editing) === "tv") || (!editing && mediaSection === "tv")) && <label>Seasons<input type="number" min="1" value={seasons} onChange={e => setSeasons(e.target.value)} placeholder="Number of seasons" /></label>}
+            {!editing && mediaSection === "all" && <label>Type<select value={entryMediaType} onChange={e => setEntryMediaType(e.target.value as typeof entryMediaType)}><option value="movie">Movie</option><option value="book">Book</option><option value="tv">TV Series</option></select></label>}
+            {((editing && getMediaType(editing) === "book") || (!editing && entryMediaType === "book")) && <label>Author *<input value={author} onChange={e => setAuthor(e.target.value)} placeholder="Author name" /></label>}
+            {((editing && getMediaType(editing) === "tv") || (!editing && entryMediaType === "tv")) && <label>Seasons<input type="number" min="1" value={seasons} onChange={e => setSeasons(e.target.value)} placeholder="Number of seasons" /></label>}
             <div className="two-col">
               <label>
                 Rating
@@ -1160,7 +1168,7 @@ if (!isValidRating(rating)) {
               <button
                 className="primary-btn"
                 onClick={() => void save()}
-                disabled={loading || !title.trim() || (((editing && getMediaType(editing) === "book") || (!editing && mediaSection === "books")) && !author.trim())}
+                disabled={loading || !title.trim() || ((editing ? getMediaType(editing) : entryMediaType) === "book" && !author.trim())}
               >
                 {loading ? <LoaderCircle className="spin" /> : null}
                 Save to GitHub
