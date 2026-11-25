@@ -5,12 +5,11 @@ import {
   Image as ImageIcon, Clapperboard, Tv, LayoutDashboard,
   Library, ArrowRight, ChartNoAxesCombined, CalendarDays
 } from "lucide-react";
-import { deleteMovie, loadMovies, saveCoverUpdates, saveMovie, testGitHub } from "./github";
-import { findCover } from "./covers";
+import { deleteMovie, loadMovies, saveMovie, testGitHub } from "./github";
 import MovieDetails from "./MovieDetails";
 import {
-  MAX_RATING, MIN_RATING, PLATFORM_NAMES, RATING_OPTIONS, RATING_STEP,
-  applyPending, getLastWatched, getRating, getTags, getWatchedDates,
+  MAX_RATING, MIN_RATING, RATING_OPTIONS, RATING_STEP,
+  applyPending, getLastWatched, getRating, getWatchedDates,
   isBacklog, isValidRating, isWatched, getMediaType
 } from "./movies";
 import type { PendingChanges } from "./movies";
@@ -78,6 +77,24 @@ function MovieGrid({
   );
 }
 
+
+function MovieList({ movies, onSelect }: { movies: Movie[]; onSelect: (movie: Movie) => void }) {
+  return (
+    <div className="movie-list">
+      {movies.map(movie => (
+        <button className="movie-list-row" key={movie.path} onClick={() => onSelect(movie)}>
+          {movie.poster ? <img src={movie.poster} alt="" loading="lazy" /> : <span className="movie-list-placeholder"><ImageIcon size={18} /></span>}
+          <span className="movie-list-copy">
+            <strong>{movie.title}</strong>
+            <small>{movie.year || "—"} · {getMediaType(movie) === "book" ? "Book" : getMediaType(movie) === "tv" ? "TV Series" : "Movie"}</small>
+          </span>
+          <span className="movie-list-rating"><Star size={14} fill="currentColor" />{getRating(movie)?.toFixed(0) ?? "—"}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => {
     try {
@@ -111,9 +128,9 @@ export default function App() {
   const [mediaSection, setMediaSection] = useState<"all" | "books" | "movies" | "tv">("all");
   const [movieView, setMovieView] = useState<"overview" | "library" | "statistics">("library");
   const [selectedStatsYear, setSelectedStatsYear] = useState(new Date().getFullYear());
-  const [filter, setFilter] = useState<"all" | "watched" | "backlog">("all");
+  const [filter, setFilter] = useState<"all" | "watched" | "backlog" | "notFinished">("all");
   const [selectedReleaseYear, setSelectedReleaseYear] = useState("all");
-  const [sortBy, setSortBy] = useState<"recent" | "oldest" | "ratingHigh" | "ratingLow" | "title">("recent");
+  const [sortBy, setSortBy] = useState<"recent" | "oldest" | "ratingHigh" | "ratingLow" | "title">("ratingHigh");
   const [minimumRating, setMinimumRating] = useState("all");
 
   const [showSettings, setShowSettings] = useState(false);
@@ -131,8 +148,6 @@ export default function App() {
   const [seasons, setSeasons] = useState("");
   const [coverMode, setCoverMode] = useState<"url" | "file">("url");
   const [entryMediaType, setEntryMediaType] = useState<"book" | "movie" | "tv">("movie");
-  const [coverProgress, setCoverProgress] = useState<{ done: number; total: number } | null>(null);
-  const [coverMessage, setCoverMessage] = useState("");
 
   const configured = Boolean(
     settings.owner && settings.repo && settings.folder && settings.token
@@ -329,12 +344,10 @@ export default function App() {
   }, [yearWatches]);
 
   const monthlyActivity = useMemo(() => {
-    return Array.from({ length: 12 }, (_, index) => ({
-      month: index,
-      count: yearWatches.filter(({ date }) =>
-        Number(date.slice(5, 7)) === index + 1
-      ).length
-    }));
+    return Array.from({ length: 12 }, (_, index) => {
+      const watches = yearWatches.filter(({ date }) => Number(date.slice(5, 7)) === index + 1);
+      return { month: index, count: watches.length, watches };
+    });
   }, [yearWatches]);
 
   const weekdayActivity = useMemo(() => {
@@ -350,43 +363,6 @@ export default function App() {
     }));
   }, [yearWatches]);
 
-  const platformActivity = useMemo(() => {
-    const platforms = ["apple", "hbo", "kino", "netflix", "prime", "stremio", "yt"];
-
-    return platforms.map(platform => ({
-      platform,
-      count: yearMovies.filter(movie =>
-        getTags(movie).includes(`movie/${platform}/${selectedStatsYear}`)
-      ).length
-    }));
-  }, [yearMovies, selectedStatsYear]);
-
-  const selectedYearReleaseActivity = useMemo(() => {
-    const counts = new Map<number, number>();
-
-    yearMovies.forEach(movie => {
-      const year = Number(movie.year);
-      if (!Number.isInteger(year)) return;
-
-      counts.set(year, (counts.get(year) || 0) + 1);
-    });
-
-    if (!counts.size) return [];
-
-    const minYear = Math.min(...counts.keys());
-    const maxYear = Math.max(...counts.keys());
-
-    return Array.from({ length: maxYear - minYear + 1 }, (_, i) => ({
-      year: minYear + i,
-      count: counts.get(minYear + i) || 0
-    }));
-  }, [yearMovies]);
-
-  const maxSelectedYearReleaseCount = Math.max(
-    1,
-    ...selectedYearReleaseActivity.map(item => item.count)
-  );
-
   // Unrated movies must not drag the average down, so they are left out.
   const ratedYearMovies = yearMovies.filter(movie => getRating(movie) !== null);
   const yearAverageRating = ratedYearMovies.length
@@ -398,7 +374,6 @@ export default function App() {
 
   const maxMonthlyCount = Math.max(1, ...monthlyActivity.map(item => item.count));
   const maxWeekdayCount = Math.max(1, ...weekdayActivity.map(item => item.count));
-  const maxPlatformCount = Math.max(1, ...platformActivity.map(item => item.count));
 
   const bestMonth = monthlyActivity.reduce(
     (best, item) => item.count > best.count ? item : best,
@@ -440,6 +415,7 @@ const averageRating = watchedMovies.length
 
     if (filter === "watched") result = result.filter(isWatched);
     if (filter === "backlog") result = result.filter(isBacklog);
+    if (filter === "notFinished") result = result.filter(movie => !isWatched(movie) && !isBacklog(movie));
     if (selectedReleaseYear !== "all") result = result.filter(movie => getWatchedDates(movie).some(date => date.slice(0, 4) === selectedReleaseYear));
     if (minimumRating !== "all") {
       result = result.filter(movie => (getRating(movie) ?? 0) >= Number(minimumRating));
@@ -455,8 +431,8 @@ const averageRating = watchedMovies.length
     result.sort((a, b) => {
       if (sortBy === "recent") return getLastWatched(b) - getLastWatched(a);
       if (sortBy === "oldest") return getLastWatched(a) - getLastWatched(b);
-      if (sortBy === "ratingHigh") return (getRating(b) ?? 0) - (getRating(a) ?? 0);
-      if (sortBy === "ratingLow") return (getRating(a) ?? 99) - (getRating(b) ?? 99);
+      if (sortBy === "ratingHigh") return (getRating(b) ?? 0) - (getRating(a) ?? 0) || a.title.localeCompare(b.title);
+      if (sortBy === "ratingLow") return (getRating(a) ?? 99) - (getRating(b) ?? 99) || a.title.localeCompare(b.title);
       return a.title.localeCompare(b.title);
     });
     return result;
@@ -544,46 +520,6 @@ if (!isValidRating(rating)) {
     }
   }
 
-  async function findMissingCovers() {
-    const missing = movies.filter(movie => !movie.poster && !String(movie.frontmatter?.cover || "").startsWith("data:image/"));
-    if (!missing.length) {
-      setCoverMessage("Every title already has a cover.");
-      return;
-    }
-    setCoverMessage("");
-    setCoverProgress({ done: 0, total: missing.length });
-    setLoading(true);
-    let cursor = 0;
-    let done = 0;
-    const updates: Array<{ path: string; poster: string }> = [];
-    const worker = async () => {
-      while (cursor < missing.length) {
-        const movie = missing[cursor++];
-        try {
-          const poster = await findCover(movie);
-          if (poster) updates.push({ path: movie.path, poster });
-        } catch { /* keep unmatched titles available for manual cover upload */ }
-        done += 1;
-        setCoverProgress({ done, total: missing.length });
-      }
-    };
-    try {
-      await Promise.all(Array.from({ length: 4 }, () => worker()));
-      if (updates.length) {
-        const saved = await saveCoverUpdates(settings, updates);
-        saved.forEach(movie => pendingRef.current.set(movie.path, movie));
-        showMovies();
-        scheduleReconcile();
-      }
-      setCoverMessage(`Added ${updates.length} covers. ${missing.length - updates.length} titles still need a manual match.`);
-    } catch (e) {
-      setError(`Covers were found, but could not be saved: ${(e as Error).message}`);
-    } finally {
-      setCoverProgress(null);
-      setLoading(false);
-    }
-  }
-
   async function remove(movie: Movie) {
     if (!confirm(`Delete "${movie.title}" from the repository?`)) return;
 
@@ -608,10 +544,6 @@ if (!isValidRating(rating)) {
           <span>my little <span className="accent">library</span></span>
         </div>
 
-        <nav className="main-nav">
-          <button className={movieView === "library" ? "active" : ""} onClick={() => setMovieView("library")}><Library size={16} /> Library</button>
-          <button className={movieView === "statistics" ? "active" : ""} onClick={() => setMovieView("statistics")}><ChartNoAxesCombined size={16} /> Stats</button>
-        </nav>
         <div className="header-actions">
           <button
             className="icon-btn"
@@ -636,8 +568,10 @@ if (!isValidRating(rating)) {
           <>
             <div className="section-nav category-nav" aria-label="Media type">
               {([["all","All"],["books","Books"],["movies","Movies"],["tv","TV Series"]] as const).map(([value,label]) => (
-                <button key={value} className={mediaSection === value ? "selected" : ""} onClick={() => setMediaSection(value)}>{label}</button>
+                <button key={value} className={movieView === "library" && mediaSection === value ? "selected" : ""} onClick={() => { setMediaSection(value); setMovieView("library"); }}>{label}</button>
               ))}
+              <span className="category-nav-divider" />
+              <button className={movieView === "statistics" ? "selected stats-tab" : "stats-tab"} onClick={() => setMovieView("statistics")}><ChartNoAxesCombined size={15} /> Stats</button>
             </div>
 
             <section className="intro intro-compact">
@@ -649,16 +583,6 @@ if (!isValidRating(rating)) {
                 <Plus size={16} /> Add {mediaSection === "all" ? "title" : mediaSection === "books" ? "book" : mediaSection === "tv" ? "show" : "movie"}
               </button>
             </section>
-
-            {configured && (
-              <div className="cover-tools">
-                <button className="secondary-btn" onClick={() => void findMissingCovers()} disabled={loading || Boolean(coverProgress)}>
-                  {coverProgress ? <LoaderCircle className="spin" size={16} /> : <ImageIcon size={16} />}
-                  {coverProgress ? `Finding covers… ${coverProgress.done}/${coverProgress.total}` : "Find covers for my library"}
-                </button>
-                {coverMessage && <span className="help">{coverMessage}</span>}
-              </div>
-            )}
 
             {error && (
               <div className="error-banner">
@@ -702,12 +626,6 @@ if (!isValidRating(rating)) {
 
                   <div className="stats-grid">
                     <article className="stat-card">
-                      <div className="stat-icon"><Film size={19} /></div>
-                      <p className="stat-label">Unique titles</p>
-                      <div className="stat-value">{yearMovies.length}</div>
-                    </article>
-
-                    <article className="stat-card">
                       <div className="stat-icon"><Clapperboard size={19} /></div>
                       <p className="stat-label">Total finishes</p>
                       <div className="stat-value">{yearWatches.length}</div>
@@ -737,19 +655,25 @@ if (!isValidRating(rating)) {
                       <span className="chart-total">{yearWatches.length} watches</span>
                     </div>
 
-                    <div className="monthly-chart">
+                    <div className="monthly-activity-list">
                       {monthlyActivity.map(item => (
-                        <div className="monthly-column" key={item.month}>
-                          <span className="chart-count">{item.count || ""}</span>
-                          <div className="monthly-bar-track">
-                            <div
-                              className="monthly-bar"
-                              style={{
-                                height: `${item.count / maxMonthlyCount * 100}%`
-                              }}
-                            />
+                        <div className="monthly-activity-row" key={item.month}>
+                          <div className="monthly-activity-heading">
+                            <strong>{monthNames[item.month]}</strong>
+                            <span>{item.count} {item.count === 1 ? "title" : "titles"}</span>
                           </div>
-                          <span className="chart-label">{monthNames[item.month]}</span>
+                          <div className="monthly-activity-track">
+                            <div className="monthly-activity-fill" style={{ width: (item.count / maxMonthlyCount * 100) + "%" }} />
+                          </div>
+                          {item.watches.length > 0 ? (
+                            <div className="monthly-posters">
+                              {item.watches.map(({ movie, date }) => (
+                                <button key={movie.path + date} onClick={() => openDetails(movie)} title={movie.title} aria-label={"Show details: " + movie.title}>
+                                  {movie.poster ? <img src={movie.poster} alt="" loading="lazy" /> : <span><ImageIcon size={16} /></span>}
+                                </button>
+                              ))}
+                            </div>
+                          ) : <p className="monthly-empty">Nothing finished this month</p>}
                         </div>
                       ))}
                     </div>
@@ -779,70 +703,6 @@ if (!isValidRating(rating)) {
                         </div>
                       ))}
                     </div>
-                  </section>
-
-                  <section className="analytics-section">
-                    <div className="section-heading">
-                      <div>
-                        <p className="eyebrow">WHERE YOU WATCH</p>
-                        <h2>Platforms</h2>
-                      </div>
-                    </div>
-
-                    {mediaSection === "movies" && <div className="platform-chart">
-                      {platformActivity.map(item => (
-                        <div className="weekday-row" key={item.platform}>
-                          <span>{PLATFORM_NAMES[item.platform] ?? item.platform}</span>
-                          <div className="weekday-track">
-                            <div
-                              className="weekday-bar"
-                              style={{
-                                width: `${item.count / maxPlatformCount * 100}%`
-                              }}
-                            />
-                          </div>
-                          <strong>{item.count}</strong>
-                        </div>
-                      ))}
-                    </div>}
-                  </section>
-
-                  <section className="analytics-section">
-                    <div className="section-heading">
-                      <div>
-                        <p className="eyebrow">COLLECTION HISTORY</p>
-                        <h3>Titles by release year</h3>
-                      </div>
-                    </div>
-
-                    {selectedYearReleaseActivity.length ? (
-                      <div className="year-horizontal-chart">
-                        <div className="horizontal-bars">
-                          {selectedYearReleaseActivity.map(item => (
-                            <div
-                              className="horizontal-bar-column"
-                              key={item.year}
-                              title={`${item.year}: ${item.count} titles`}
-                            >
-                              <div className="horizontal-bar-track">
-                                <div
-                                  className="horizontal-bar"
-                                  style={{
-                                    height: `${item.count / maxSelectedYearReleaseCount * 100}%`
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="horizontal-axis">
-                          <span>{selectedYearReleaseActivity[0]?.year}</span>
-                          <span>{selectedYearReleaseActivity[selectedYearReleaseActivity.length - 1]?.year}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="chart-empty">No release-year data available.</p>
-                    )}
                   </section>
 
                   <section className="analytics-section">
@@ -883,7 +743,7 @@ if (!isValidRating(rating)) {
                     <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}>
                       <option value="recent">Recently finished</option>
                       <option value="oldest">Oldest finished</option>
-                      <option value="ratingHigh">Highest rated</option>
+                      <option value="ratingHigh">Ranking</option>
                       <option value="ratingLow">Lowest rated</option>
                       <option value="title">Title</option>
                     </select>
@@ -900,9 +760,8 @@ if (!isValidRating(rating)) {
                   </label>
                 </div>
 
-                {coverMessage && <p className="cover-message">{coverMessage}</p>}
                 <div className="filter-bar">
-                  {([["all","All"],["watched","Finished"],["backlog","Backlog"]] as const).map(([value,label]) => (
+                  {([["all","All"],["watched","Finished"],["backlog","Backlog"],["notFinished","Not finished"]] as const).map(([value,label]) => (
                     <button key={value} className={filter === value ? "active" : ""} onClick={() => setFilter(value)}>{label}</button>
                   ))}
                   <label className="year-filter"><span>Year</span>
@@ -929,7 +788,7 @@ if (!isValidRating(rating)) {
                     )}
                   </div>
                 ) : (
-                  <MovieGrid movies={visibleMovies} onSelect={openDetails} />
+                  <MovieList movies={visibleMovies} onSelect={openDetails} />
                 )}
               </>
             )}
