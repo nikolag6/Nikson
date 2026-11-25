@@ -86,7 +86,7 @@ function MovieList({ movies, onSelect }: { movies: Movie[]; onSelect: (movie: Mo
           {movie.poster ? <img src={movie.poster} alt="" loading="lazy" /> : <span className="movie-list-placeholder"><ImageIcon size={18} /></span>}
           <span className="movie-list-copy">
             <strong>{movie.title}</strong>
-            <small>{movie.year || "—"} · {getMediaType(movie) === "book" ? "Book" : getMediaType(movie) === "tv" ? "TV Series" : "Movie"}</small>
+            <small>{getMediaType(movie) === "book" ? "Book" : getMediaType(movie) === "tv" ? "TV Series" : "Movie"}{getLastWatched(movie) ? " · Finished " + new Date(getLastWatched(movie)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}</small>
           </span>
           <span className="movie-list-rating"><Star size={14} fill="currentColor" />{getRating(movie)?.toFixed(0) ?? "—"}</span>
         </button>
