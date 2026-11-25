@@ -222,7 +222,7 @@ export async function saveMovie(
   frontmatter.year = year ? Number(year) : null;
   frontmatter.rating = values.rating.trim() === "" ? null : Number(values.rating);
   frontmatter.cover = poster || null;
-  if (values.finishedOn && /^\\d{4}-\\d{2}-\\d{2}$/.test(values.finishedOn)) {
+  if (values.finishedOn && /^\d{4}-\d{2}-\d{2}$/.test(values.finishedOn)) {
     const dates = Array.isArray(frontmatter.watched) ? [...frontmatter.watched] : frontmatter.watched ? [frontmatter.watched] : [];
     const wikiDate = `[[${values.finishedOn}]]`;
     if (!dates.some(value => String(value).includes(values.finishedOn!))) dates.push(wikiDate);
