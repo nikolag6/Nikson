@@ -81,7 +81,11 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-      if (saved.folder === "Database") saved.folder = "Movies/Database";
+      if (saved.repo === "media_lists" || saved.folder === "Movies/Database" || saved.folder === "Database") {
+        saved.repo = "private-data";
+        saved.folder = "Library/Database";
+        saved.token = "";
+      }
       return { ...defaults, ...saved };
     } catch {
       return defaults;
