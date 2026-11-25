@@ -3,7 +3,7 @@ import {
   Film, Plus, Search, Settings as SettingsIcon, Star, X, BookOpen,
   RefreshCw, Github, LoaderCircle, Pencil, Trash2, Info,
   Image as ImageIcon, Clapperboard, Tv, LayoutDashboard,
-  ArrowRight, ChartNoAxesCombined, CalendarDays
+  ArrowRight, ChartNoAxesCombined, CalendarDays, Library
 } from "lucide-react";
 import { deleteMovie, loadMovies, saveMovie, testGitHub } from "./github";
 import MovieDetails from "./MovieDetails";
