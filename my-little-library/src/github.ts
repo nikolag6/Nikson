@@ -89,63 +89,76 @@ function repositoryContentsUrl(s: Settings, path: string) {
   return `${API}/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}/contents/${encoded}?ref=${encodeURIComponent(s.branch)}`;
 }
 
-function indexPath(s: Settings) {
+function databasePath(s: Settings) {
   const parts = cleanFolder(s.folder).split("/").filter(Boolean);
   parts.pop();
-  return [...parts, "movies_index.json"].join("/");
+  return [...parts, "library.json.gz"].join("/");
 }
 
-async function requestText(url: string, token: string): Promise<string> {
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      ...headers(token),
-      Accept: "application/vnd.github.raw+json",
-    },
+function databaseUrl(s: Settings) {
+  return repositoryContentsUrl(s, databasePath(s));
+}
+
+async function readDatabase(s: Settings): Promise<{ entries: Movie[]; sha: string }> {
+  const file = await request(databaseUrl(s), s.token);
+  if (!file?.content || !file?.sha) {
+    throw new Error("The private library database was not found. Check that the repository is private-data and the folder is Library/Database.");
+  }
+  const binary = atob(String(file.content).replace(/\\s/g, ""));
+  const compressed = Uint8Array.from(binary, char => char.charCodeAt(0));
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("This browser cannot open the compressed library file. Please update your browser.");
+  }
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const raw = await new Response(stream).text();
+  const parsed = JSON.parse(raw) as { entries?: unknown };
+  if (!Array.isArray(parsed.entries)) throw new Error("The private library database has an invalid format.");
+  return {
+    entries: (parsed.entries as Movie[]).filter(item =>
+      item && typeof item.path === "string" && typeof item.title === "string"
+    ).map(item => ({ ...item, sha: file.sha })),
+    sha: file.sha
+  };
+}
+
+async function writeDatabase(s: Settings, entries: Movie[], sha: string): Promise<string> {
+  if (typeof CompressionStream === "undefined") {
+    throw new Error("This browser cannot update the compressed library file. Please update your browser.");
+  }
+  const payload = JSON.stringify({ version: 1, entries });
+  const stream = new Blob([payload]).stream().pipeThrough(new CompressionStream("gzip"));
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  let binary = "";
+  bytes.forEach(byte => binary += String.fromCharCode(byte));
+  const content = btoa(binary);
+  const written = await request(databaseUrl(s), s.token, {
+    method: "PUT",
+    body: JSON.stringify({
+      message: "Update personal library",
+      content,
+      sha,
+      branch: s.branch
+    })
   });
-  if (!response.ok) return failFrom(response);
-  return response.text();
+  return String(written?.content?.sha ?? "");
 }
 
-/**
- * Loads the generated index once. The index lags behind writes (it is rebuilt
- * by GitHub Actions), so callers lay their own pending changes over the result
- * instead of waiting for it to catch up.
- */
+/** Loads the private compressed JSON database in one GitHub request. */
 export async function loadMovies(s: Settings): Promise<Movie[]> {
-  const url = repositoryContentsUrl(s, indexPath(s));
-
-  let raw: string;
   try {
-    // Raw content avoids the 1 MB Contents API JSON response limit.
-    raw = await requestText(url, s.token);
+    const database = await readDatabase(s);
+    return database.entries;
   } catch (e) {
     if (e instanceof GitHubError && e.status === 404) {
-      throw new Error("movies_index.json was not found. Copy the script and workflow to the media_lists repository and run the \"Generate movies index\" workflow.");
+      throw new Error("library.json.gz was not found in your private-data repository. Check the repository and folder in Settings.");
     }
     throw e;
   }
-
-  let index: { movies?: unknown };
-  try {
-    index = JSON.parse(raw);
-  } catch {
-    throw new Error("movies_index.json is not valid JSON. Re-run the \"Generate movies index\" workflow.");
-  }
-
-  if (!Array.isArray(index.movies)) {
-    throw new Error("Invalid movies_index.json format.");
-  }
-
-  // Skip malformed entries instead of letting one of them break the whole app.
-  return (index.movies as Movie[]).filter(movie =>
-    movie && typeof movie.path === "string" && typeof movie.title === "string"
-  );
 }
 
 export async function testGitHub(s: Settings) {
   await request(`${API}/repos/${encodeURIComponent(s.owner)}/${encodeURIComponent(s.repo)}`, s.token);
-  await request(`${contentsUrl(s)}?ref=${encodeURIComponent(s.branch)}`, s.token);
+  await readDatabase(s);
 }
 
 function localTimestamp() {
@@ -178,74 +191,49 @@ export type SaveResult = {
 export async function saveMovie(
   s: Settings,
   movie: Movie | null,
-  values: { title: string; year: string; rating: string; poster: string; note: string; finishedOn?: string }
+  values: { title: string; year: string; rating: string; poster: string; note: string; finishedOn?: string; mediaType?: "book" | "movie" | "tv" }
 ): Promise<SaveResult> {
   const title = sanitizeFilename(values.title);
   const year = values.year.trim();
+  const mediaType = values.mediaType || (movie?.frontmatter?.media_type as "book" | "movie" | "tv") || "movie";
   if (!title) throw new Error("Enter a title (it cannot consist only of characters that are not allowed in file names).");
-  if (!/^\d{4}$/.test(year)) throw new Error("Enter the year as YYYY.");
+  if (year && !/^\\d{4}$/.test(year)) throw new Error("Enter the year as YYYY, or leave it blank.");
   if (!isValidRating(values.rating)) {
     throw new Error(`Rating must be empty or between ${MIN_RATING} and ${MAX_RATING} in steps of ${RATING_STEP}.`);
   }
 
   const folder = cleanFolder(s.folder);
-  const filename = `${title} (${year}).md`;
-  const targetPath = `${folder}/${year}/${filename}`;
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
+  const targetPath = `${folder}/${mediaType}/${slug}.md`;
   const oldPath = movie?.path || "";
-  // Mixed content (http images on an https page) is blocked by browsers.
-  const poster = values.poster.trim().replace(/^http:\/\//i, "https://");
+  const poster = values.poster.trim().replace(/^http:\\/\\//i, "https://");
+  const database = await readDatabase(s);
 
-  // Start from the original YAML so tags, aliases, watched dates and all
-  // Obsidian-specific properties survive edits unchanged.
   const frontmatter: Record<string, unknown> = movie ? { ...movie.frontmatter } : {
-    tags: ["movie"],
+    tags: [mediaType],
     aliases: [],
     paused: false,
     dropped: false,
     watched: [],
-    seria: null,
-    nr_seri: null,
-    lboxd_url: "",
-    imdb_url: "",
-    tmdb_url: "",
-    directors: [],
-    countries: [],
-    genres: [],
     created: localTimestamp(),
   };
-
-  // Keep the Obsidian schema: cover/year/rating, not title/poster/release_year.
-  frontmatter.year = Number(year);
+  frontmatter.media_type = mediaType;
+  frontmatter.tags = Array.from(new Set([...((Array.isArray(frontmatter.tags) ? frontmatter.tags : []) as string[]), mediaType]));
+  frontmatter.year = year ? Number(year) : null;
   frontmatter.rating = values.rating.trim() === "" ? null : Number(values.rating);
   frontmatter.cover = poster || null;
-  if (values.finishedOn && /^\d{4}-\d{2}-\d{2}$/.test(values.finishedOn)) {
+  if (values.finishedOn && /^\\d{4}-\\d{2}-\\d{2}$/.test(values.finishedOn)) {
     const dates = Array.isArray(frontmatter.watched) ? [...frontmatter.watched] : frontmatter.watched ? [frontmatter.watched] : [];
     const wikiDate = `[[${values.finishedOn}]]`;
     if (!dates.some(value => String(value).includes(values.finishedOn!))) dates.push(wikiDate);
     frontmatter.watched = dates;
   }
   frontmatter.last_modified = localTimestamp();
-  // nullStr "" writes `seria:` like Obsidian does, instead of `seria: null`.
-  const yaml = stringify(frontmatter, { lineWidth: 0, nullStr: "" }).trimEnd();
+
   const body = updateCoverInBody(values.note, poster).trim();
-  const content = `---\n${yaml}\n---\n\n${body}\n`;
-  const payload: Record<string, unknown> = {
-    message: `${movie ? "Update" : "Add"} ${title} (${year})`,
-    content: encodeBase64(content),
-    branch: s.branch,
-  };
-
-  // Same path: update in place (needs the current SHA). Different path (new
-  // note, or title/year changed): create the file, then remove the old one.
-  if (movie && oldPath === targetPath) payload.sha = movie.sha;
-  const written = await request(contentsUrl(s, relativeToFolder(targetPath, folder)), s.token, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-
   const saved: Movie = {
-    path: written?.content?.path ?? targetPath,
-    sha: String(written?.content?.sha ?? ""),
+    path: targetPath,
+    sha: database.sha,
     title,
     year,
     rating: values.rating.trim(),
@@ -254,33 +242,16 @@ export async function saveMovie(
     frontmatter,
   };
 
-  let removedPath: string | null = null;
-  let warning: string | undefined;
-
-  if (movie && oldPath !== targetPath) {
-    try {
-      await request(contentsUrl(s, relativeToFolder(oldPath, folder)), s.token, {
-        method: "DELETE",
-        body: JSON.stringify({ message: `Move ${title} to ${year}`, sha: movie.sha, branch: s.branch }),
-      });
-      removedPath = oldPath;
-    } catch (e) {
-      // The new note exists; only the old copy is left behind.
-      warning = `Saved as "${targetPath}", but the old file "${oldPath}" could not be deleted (${(e as Error).message}). Delete it manually to avoid a duplicate.`;
-    }
-  }
-
-  return { movie: saved, removedPath, warning };
+  const entries = database.entries.filter(entry => entry.path !== oldPath && entry.path !== targetPath);
+  entries.push(saved);
+  const newSha = await writeDatabase(s, entries, database.sha);
+  saved.sha = newSha;
+  return { movie: saved, removedPath: movie && oldPath !== targetPath ? oldPath : null };
 }
 
 export async function deleteMovie(s: Settings, movie: Movie) {
-  const folder = cleanFolder(s.folder);
-  await request(contentsUrl(s, relativeToFolder(movie.path, folder)), s.token, {
-    method: "DELETE",
-    body: JSON.stringify({
-      message: `Delete ${movie.title}`,
-      sha: movie.sha,
-      branch: s.branch,
-    }),
-  });
+  const database = await readDatabase(s);
+  const entries = database.entries.filter(entry => entry.path !== movie.path);
+  if (entries.length === database.entries.length) return;
+  await writeDatabase(s, entries, database.sha);
 }
