@@ -39,6 +39,8 @@ export default function MovieDetails({ movie }: { movie: Movie }) {
 
   const series = getText(movie, "seria");
   const seriesNumber = getText(movie, "nr_seri");
+  const author = getText(movie, "author");
+  const seasons = getText(movie, "seasons");
   const created = getText(movie, "created");
   const modified = getText(movie, "last_modified");
   const note = stripCoverFromBody(movie.body);
@@ -89,6 +91,9 @@ export default function MovieDetails({ movie }: { movie: Movie }) {
           </div>
 
           {badges.length > 0 && <Chips items={badges} />}
+
+          {author && <p className="details-line">By {author}</p>}
+          {seasons && <p className="details-line">{seasons} seasons</p>}
 
           {series && (
             <p className="details-line">
