@@ -243,6 +243,33 @@ export async function saveMovie(
   return { movie: saved, removedPath: movie && oldPath !== targetPath ? oldPath : null };
 }
 
+/** Saves many automatically discovered covers in one private-database update. */
+export async function saveCoverUpdates(
+  s: Settings,
+  updates: Array<{ path: string; poster: string }>
+): Promise<Movie[]> {
+  if (!updates.length) return [];
+  const database = await readDatabase(s);
+  const byPath = new Map(updates.map(item => [item.path, item.poster]));
+  const updated: Movie[] = [];
+  const entries = database.entries.map(entry => {
+    const poster = byPath.get(entry.path);
+    if (!poster) return entry;
+    const next: Movie = {
+      ...entry,
+      poster,
+      frontmatter: { ...entry.frontmatter, cover: poster },
+    };
+    updated.push(next);
+    return next;
+  });
+  if (updated.length) {
+    const newSha = await writeDatabase(s, entries, database.sha);
+    updated.forEach(movie => { movie.sha = newSha; });
+  }
+  return updated;
+}
+
 export async function deleteMovie(s: Settings, movie: Movie) {
   const database = await readDatabase(s);
   const entries = database.entries.filter(entry => entry.path !== movie.path);
