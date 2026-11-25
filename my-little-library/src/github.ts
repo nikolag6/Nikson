@@ -104,7 +104,7 @@ async function readDatabase(s: Settings): Promise<{ entries: Movie[]; sha: strin
   if (!file?.content || !file?.sha) {
     throw new Error("The private library database was not found. Check that the repository is private-data and the folder is Library/Database.");
   }
-  const binary = atob(String(file.content).replace(/\\s/g, ""));
+  const binary = atob(String(file.content).replace(/\s/g, ""));
   const compressed = Uint8Array.from(binary, char => char.charCodeAt(0));
   if (typeof DecompressionStream === "undefined") {
     throw new Error("This browser cannot open the compressed library file. Please update your browser.");
@@ -197,7 +197,7 @@ export async function saveMovie(
   const year = values.year.trim();
   const mediaType = values.mediaType || (movie?.frontmatter?.media_type as "book" | "movie" | "tv") || "movie";
   if (!title) throw new Error("Enter a title (it cannot consist only of characters that are not allowed in file names).");
-  if (year && !/^\\d{4}$/.test(year)) throw new Error("Enter the year as YYYY, or leave it blank.");
+  if (year && !/^\d{4}$/.test(year)) throw new Error("Enter the year as YYYY, or leave it blank.");
   if (!isValidRating(values.rating)) {
     throw new Error(`Rating must be empty or between ${MIN_RATING} and ${MAX_RATING} in steps of ${RATING_STEP}.`);
   }
@@ -206,7 +206,7 @@ export async function saveMovie(
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
   const targetPath = `${folder}/${mediaType}/${slug}.md`;
   const oldPath = movie?.path || "";
-  const poster = values.poster.trim().replace(/^http:\\/\\//i, "https://");
+  const poster = values.poster.trim().replace(/^http:\/\//i, "https://");
   const database = await readDatabase(s);
 
   const frontmatter: Record<string, unknown> = movie ? { ...movie.frontmatter } : {
