@@ -95,6 +95,7 @@ function MovieList({ movies, onSelect }: { movies: Movie[]; onSelect: (movie: Mo
   );
 }
 
+// Library UI: ranked list, inline Stats tab and clickable monthly poster history.
 export default function App() {
   const [settings, setSettings] = useState<Settings>(() => {
     try {
